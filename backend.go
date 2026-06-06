@@ -37,10 +37,8 @@ func backend() *netboxBackend {
 	b.Backend = &framework.Backend{
 		Help: strings.TrimSpace(backendHelp),
 		PathsSpecial: &logical.Paths{
-			LocalStorage: []string{},
 			SealWrapStorage: []string{
 				"config",
-				"role/*",
 			},
 		},
 		Paths:       framework.PathAppend(),
