@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
@@ -19,6 +20,7 @@ type netboxConfig struct {
 	Token       string `json:"token"`
 	InsecureTLS bool   `json:"insecure"`
 	CACert      string `json:"cacert"`
+	TokenScheme string `json:"tokenscheme"`
 }
 
 // pathConfig extends the Vault API with a `/config` endpoint for this backend
@@ -66,6 +68,17 @@ func pathConfig(b *netboxBackend) *framework.Path {
 					Name:      "CA Certificate",
 					Sensitive: false,
 				},
+			},
+			"token_scheme": {
+				Type:        framework.TypeString,
+				Description: "Netbox token scheme (auto, v1, v2)",
+				Required:    false,
+				Default:     "auto",
+				DisplayAttrs: &framework.DisplayAttributes{
+					Name:      "Token Scheme",
+					Sensitive: false,
+				},
+				AllowedValues: []interface{}{"auto", "v1", "v2"},
 			},
 		},
 
@@ -117,9 +130,10 @@ func (b *netboxBackend) pathConfigRead(ctx context.Context, req *logical.Request
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"url":      config.URL,
-			"insecure": config.InsecureTLS,
-			"ca_cert":  config.CACert,
+			"url":          config.URL,
+			"insecure":     config.InsecureTLS,
+			"ca_cert":      config.CACert,
+			"token_scheme": config.TokenScheme,
 		},
 	}, nil
 }
@@ -176,6 +190,23 @@ func (b *netboxBackend) pathConfigWrite(ctx context.Context, req *logical.Reques
 		config.CACert = data.GetDefaultOrZero("ca_cert").(string)
 	}
 
+	// Field: TokenScheme (not required, set default)
+	if tokenScheme, ok := data.GetOk("token_scheme"); ok {
+		lowerScheme := strings.ToLower(tokenScheme.(string))
+		if lowerScheme == "" {
+			config.TokenScheme = data.GetDefaultOrZero("token_scheme").(string)
+		} else {
+			switch lowerScheme {
+			case "auto", "v1", "v2":
+				config.TokenScheme = lowerScheme
+			default:
+				return nil, fmt.Errorf("token_scheme must be one of: auto, v1, v2")
+			}
+		}
+	} else if createMode {
+		config.TokenScheme = data.GetDefaultOrZero("token_scheme").(string)
+	}
+
 	entry, err := logical.StorageEntryJSON(configStoragePath, config)
 	if err != nil {
 		return nil, err
@@ -220,11 +251,15 @@ func getConfig(ctx context.Context, s logical.Storage) (*netboxConfig, error) {
 
 	// Create our struct, and decode the json
 	config := new(netboxConfig)
-	err = entry.DecodeJSON(&config)
 
-	// Decode error
+	err = entry.DecodeJSON(&config)
 	if err != nil {
 		return nil, fmt.Errorf("error reading root configuration: %w", err)
+	}
+
+	// treat empty string on TokenScheme as auto
+	if config.TokenScheme == "" {
+		config.TokenScheme = "auto"
 	}
 
 	// Return the config
