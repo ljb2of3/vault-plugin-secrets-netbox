@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -92,13 +93,13 @@ func newClient(config *netboxConfig) (*netboxClient, error) {
 	}, nil
 }
 
-func (c *netboxClient) doRequest(ctx context.Context, method string, path string, body any) (*http.Response, error) {
+func (c *netboxClient) rawRequest(ctx context.Context, method string, path string, body any) (*http.Response, error) {
 	// JSON encode the body
 	var reader io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %w", errBuildingRequest, err)
 		}
 
 		reader = bytes.NewReader(encoded)
@@ -107,7 +108,7 @@ func (c *netboxClient) doRequest(ctx context.Context, method string, path string
 	// Construct request
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", errBuildingRequest, err)
 	}
 
 	// Set the auth header
@@ -130,25 +131,43 @@ func (c *netboxClient) doRequest(ctx context.Context, method string, path string
 	// Fire the request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", errRequestFailure, err)
 	}
 
 	return resp, nil
 }
 
-func (c *netboxClient) resolveUserID(ctx context.Context, username string) (int, error) {
-	resp, err := c.doRequest(ctx, "GET", "/api/users/users/?username="+url.QueryEscape(username), nil)
+func (c *netboxClient) doRequest(ctx context.Context, method string, path string, input any, output any) error {
+	resp, err := c.rawRequest(ctx, method, path, input)
 	if err != nil {
-		return -1, err
+		return err
 	}
 
 	// Close the body when we exit the func
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return -1, errors.New("unable to fetch user id: " + http.StatusText(resp.StatusCode))
+		return fmt.Errorf("%w: %d %s", errUnexpectedStatus, resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
+	if output != nil {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("%w: %w", errReadingResponse, err)
+		}
+
+		err = json.Unmarshal(body, output)
+		if err != nil {
+			return fmt.Errorf("%w: %w", errInvalidResponseBody, err)
+		}
+	} else {
+		_, _ = io.Copy(io.Discard, resp.Body)
+	}
+
+	return nil
+}
+
+func (c *netboxClient) resolveUserID(ctx context.Context, username string) (int, error) {
 	data := struct {
 		Count   int `json:"count"`
 		Results []struct {
@@ -157,31 +176,37 @@ func (c *netboxClient) resolveUserID(ctx context.Context, username string) (int,
 		} `json:"results"`
 	}{}
 
-	body, err := io.ReadAll(resp.Body)
+	err := c.doRequest(ctx, "GET", "/api/users/users/?username="+url.QueryEscape(username), nil, &data)
 	if err != nil {
-		return -1, errors.New("unable to fetch user id: error reading response body")
-	}
-
-	err = json.Unmarshal(body, &data)
-	if err != nil {
-		return -1, errors.New("unable to fetch user id: error decoding response body")
+		return 0, err
 	}
 
 	if data.Count == 0 {
-		return -1, errors.New("unable to fetch user id: user not found")
+		return 0, errUserNotFound
 	}
 
 	if data.Count > 1 {
-		return -1, errors.New("unable to fetch user id: too many results returned")
+		return 0, errUnexpectedNumResults
 	}
 
 	if len(data.Results) != 1 {
-		return -1, errors.New("unable to fetch user id: unexpected number of results returned")
+		return 0, errUnexpectedNumResults
 	}
 
 	if !strings.EqualFold(data.Results[0].Username, username) {
-		return -1, errors.New("unable to fetch user id: query returned wrong user")
+		return 0, errWrongUser
 	}
 
 	return data.Results[0].ID, nil
 }
+
+var (
+	errBuildingRequest      = errors.New("bad request")
+	errRequestFailure       = errors.New("request failure")
+	errUnexpectedStatus     = errors.New("unexpected status code")
+	errReadingResponse      = errors.New("reading response body")
+	errInvalidResponseBody  = errors.New("invalid response body")
+	errUserNotFound         = errors.New("user not found")
+	errUnexpectedNumResults = errors.New("unexpected number of results")
+	errWrongUser            = errors.New("query returned wrong user")
+)
