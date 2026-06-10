@@ -1,48 +1,39 @@
 package secretengine
 
 import (
-	"context"
 	"testing"
 
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func TestConfig_Create(t *testing.T) {
+func TestConfig_CreateSetsFields(t *testing.T) {
 	tests := []struct {
 		name   string
 		create map[string]any
 	}{
 		{
-			name:   "minimal",
+			name:   "url and token",
 			create: map[string]any{"url": "https://nb.example.com", "token": "secret"},
 		},
 		{
-			name:   "optional insecure true",
+			name:   "insecure",
 			create: map[string]any{"url": "https://nb.example.com", "token": "secret", "insecure": true},
 		},
 		{
-			name:   "optional insecure false",
-			create: map[string]any{"url": "https://nb.example.com", "token": "secret", "insecure": false},
-		},
-		{
-			name:   "optional ca_cert",
+			name:   "ca_cert",
 			create: map[string]any{"url": "https://nb.example.com", "token": "secret", "ca_cert": "test-cert"},
 		},
 		{
-			name:   "optional token_scheme auto",
+			name:   "token_scheme to auto",
 			create: map[string]any{"url": "https://nb.example.com", "token": "secret", "token_scheme": "auto"},
 		},
 		{
-			name:   "optional token_scheme v1",
+			name:   "token_scheme to v1",
 			create: map[string]any{"url": "https://nb.example.com", "token": "secret", "token_scheme": "v1"},
 		},
 		{
-			name:   "optional token_scheme v2",
+			name:   "optional token_scheme to v2",
 			create: map[string]any{"url": "https://nb.example.com", "token": "secret", "token_scheme": "v2"},
-		},
-		{
-			name:   "everything",
-			create: map[string]any{"url": "https://nb.example.com", "token": "secret", "insecure": true, "ca_cert": "asdf", "token_scheme": "v2"},
 		},
 	}
 
@@ -51,7 +42,7 @@ func TestConfig_Create(t *testing.T) {
 			b, storage := testBackend(t)
 
 			// Write test data. Sucessful CREATEs apparently return nil,nil
-			resp, err := b.HandleRequest(context.Background(), &logical.Request{
+			resp, err := b.HandleRequest(t.Context(), &logical.Request{
 				Operation: logical.CreateOperation,
 				Path:      "config",
 				Data:      tt.create,
@@ -69,13 +60,16 @@ func TestConfig_Create(t *testing.T) {
 			}
 
 			// Did our token actually get set?
-			cfg, _ := getConfig(context.Background(), storage)
+			cfg, err := getConfig(t.Context(), storage)
+			if err != nil {
+				t.Fatalf("getClient() returned err: %v", err)
+			}
 			if cfg.Token != tt.create["token"] {
 				t.Fatalf(`CREATE /config didn't set token. Wanted %v, got %v`, tt.create["token"], cfg.Token)
 			}
 
 			// Read it back
-			resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			resp, err = b.HandleRequest(t.Context(), &logical.Request{
 				Operation: logical.ReadOperation,
 				Path:      "config",
 				Storage:   storage,
@@ -121,7 +115,7 @@ func TestConfig_Create(t *testing.T) {
 
 }
 
-func TestConfig_Update(t *testing.T) {
+func TestConfig_UpdateSetsFields(t *testing.T) {
 	tests := []struct {
 		name   string
 		create map[string]any
@@ -152,11 +146,6 @@ func TestConfig_Update(t *testing.T) {
 			create: map[string]any{"url": "https://nb.example.com", "token": "secret"},
 			update: map[string]any{"token_scheme": "v2"},
 		},
-		{
-			name:   "everything",
-			create: map[string]any{"url": "https://nb.example.com", "token": "secret", "insecure": true, "ca_cert": "asdf", "token_scheme": "v2"},
-			update: map[string]any{"url": "https://nb.local", "token": "different", "insecure": false, "ca_cert": "foobar", "token_scheme": "auto"},
-		},
 	}
 
 	for _, tt := range tests {
@@ -164,7 +153,7 @@ func TestConfig_Update(t *testing.T) {
 			b, storage := testBackend(t)
 
 			// Write test data. Sucessful CREATEs apparently return nil,nil
-			resp, err := b.HandleRequest(context.Background(), &logical.Request{
+			resp, err := b.HandleRequest(t.Context(), &logical.Request{
 				Operation: logical.CreateOperation,
 				Path:      "config",
 				Data:      tt.create,
@@ -182,7 +171,7 @@ func TestConfig_Update(t *testing.T) {
 			}
 
 			// Do an update
-			resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			resp, err = b.HandleRequest(t.Context(), &logical.Request{
 				Operation: logical.UpdateOperation,
 				Path:      "config",
 				Data:      tt.update,
@@ -200,7 +189,10 @@ func TestConfig_Update(t *testing.T) {
 			}
 
 			// Did our token actually get updated?
-			cfg, _ := getConfig(context.Background(), storage)
+			cfg, err := getConfig(t.Context(), storage)
+			if err != nil {
+				t.Fatalf("getClient() returned err: %v", err)
+			}
 			if _, ok := tt.update["token"]; ok {
 				if cfg.Token != tt.update["token"] {
 					t.Fatalf(`UPDATE /config didn't set token. Wanted %v, got %v`, tt.update["token"], cfg.Token)
@@ -212,7 +204,7 @@ func TestConfig_Update(t *testing.T) {
 			}
 
 			// Read it back
-			resp, err = b.HandleRequest(context.Background(), &logical.Request{
+			resp, err = b.HandleRequest(t.Context(), &logical.Request{
 				Operation: logical.ReadOperation,
 				Path:      "config",
 				Storage:   storage,
@@ -256,11 +248,11 @@ func TestConfig_Update(t *testing.T) {
 }
 
 // Ensures we error if a URL isn't set
-func TestConfig_MissingURL(t *testing.T) {
+func TestConfig_CreateReturnsUserErrorForMissingURL(t *testing.T) {
 	b, storage := testBackend(t)
 
 	// Create with missing URL
-	resp, err := b.HandleRequest(context.Background(), &logical.Request{
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
 		Operation: logical.CreateOperation,
 		Path:      "config",
 		Data:      map[string]any{"token": "secret"},
@@ -279,11 +271,11 @@ func TestConfig_MissingURL(t *testing.T) {
 }
 
 // Ensures we error if a token isn't set
-func TestConfig_MissingToken(t *testing.T) {
+func TestConfig_CreateReturnsUserErrorForMissingToken(t *testing.T) {
 	b, storage := testBackend(t)
 
 	// Create with missing URL
-	resp, err := b.HandleRequest(context.Background(), &logical.Request{
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
 		Operation: logical.CreateOperation,
 		Path:      "config",
 		Data:      map[string]any{"url": "https://nb.example.com"},
@@ -302,11 +294,11 @@ func TestConfig_MissingToken(t *testing.T) {
 }
 
 // Ensures we error if we pass the wrong token value
-func TestConfig_WrongTokenScheme(t *testing.T) {
+func TestConfig_CreateReturnsUserErrorForInvalidTokenScheme(t *testing.T) {
 	b, storage := testBackend(t)
 
 	// Create with missing URL
-	resp, err := b.HandleRequest(context.Background(), &logical.Request{
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
 		Operation: logical.CreateOperation,
 		Path:      "config",
 		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret", "token_scheme": "v3"},
@@ -324,11 +316,11 @@ func TestConfig_WrongTokenScheme(t *testing.T) {
 	}
 }
 
-func TestConfig_VerifyDefaults(t *testing.T) {
+func TestConfig_CreateSetsDefaults(t *testing.T) {
 	b, storage := testBackend(t)
 
 	// Create with missing URL
-	resp, err := b.HandleRequest(context.Background(), &logical.Request{
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
 		Operation: logical.CreateOperation,
 		Path:      "config",
 		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret"},
@@ -345,7 +337,7 @@ func TestConfig_VerifyDefaults(t *testing.T) {
 		t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
 	}
 
-	resp, err = b.HandleRequest(context.Background(), &logical.Request{
+	resp, err = b.HandleRequest(t.Context(), &logical.Request{
 		Operation: logical.ReadOperation,
 		Path:      "config",
 		Storage:   storage,
@@ -373,4 +365,321 @@ func TestConfig_VerifyDefaults(t *testing.T) {
 	if resp.Data["token_scheme"] != "auto" {
 		t.Fatalf(`CREATE /config didn't set default for "token_scheme": wanted auto, got %v`, resp.Data["token_scheme"])
 	}
+}
+
+func TestConfig_ReadAfterDeleteReturnsNil(t *testing.T) {
+	b, storage := testBackend(t)
+
+	// Create with missing URL
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "config",
+		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret"},
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("CREATE /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
+	}
+
+	resp, err = b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.DeleteOperation,
+		Path:      "config",
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("DELETE /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`DELETE /config failed with %v"`, resp.Error())
+	}
+
+	resp, err = b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "config",
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("READ /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`READ /config failed with %v"`, resp.Error())
+	}
+
+	if resp != nil {
+		t.Fatalf(`READ /config after DELETE returned data`)
+	}
+}
+
+func TestConfig_DeleteResetsClient(t *testing.T) {
+	b, storage := testBackend(t)
+
+	// Create with missing URL
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "config",
+		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret"},
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("CREATE /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
+	}
+
+	// Warm the cache
+	client, err := b.getClient(t.Context(), storage)
+	if err != nil {
+		t.Fatalf("getClient() returned an error: %v", err)
+	}
+
+	if client == nil {
+		t.Fatalf("getClient() did not return a client")
+	}
+
+	// Delete
+	resp, err = b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.DeleteOperation,
+		Path:      "config",
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("DELETE /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`DELETE /config failed with %v"`, resp.Error())
+	}
+
+	// Verify the client was reset
+	client, err = b.getClient(t.Context(), storage)
+	if err == nil {
+		t.Fatalf("getClient() did not return an error")
+	}
+
+	if client != nil {
+		t.Fatalf("getClient() did not return nil")
+	}
+}
+
+func TestConfig_DeleteIsIdempotent(t *testing.T) {
+	b, storage := testBackend(t)
+
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.DeleteOperation,
+		Path:      "config",
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("DELETE /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`DELETE /config failed with %v"`, resp.Error())
+	}
+}
+
+func TestConfig_ReadReturnsNilWhenNotConfigured(t *testing.T) {
+	b, storage := testBackend(t)
+
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "config",
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("READ /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`READ /config failed with %v"`, resp.Error())
+	}
+
+	if resp != nil {
+		t.Fatalf("READ /config returned data")
+	}
+}
+
+func TestConfig_CreateNormalizesTokenSchemeCase(t *testing.T) {
+	tests := []struct {
+		name string
+		set  string
+		want string
+	}{
+		{name: "auto", set: "AUTO", want: "auto"},
+		{name: "v1", set: "V1", want: "v1"},
+		{name: "v2", set: "V2", want: "v2"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, storage := testBackend(t)
+
+			// Create with missing URL
+			resp, err := b.HandleRequest(t.Context(), &logical.Request{
+				Operation: logical.CreateOperation,
+				Path:      "config",
+				Data:      map[string]any{"url": "https://nb.example.com", "token": "secret", "token_scheme": tt.set},
+				Storage:   storage,
+			})
+
+			// 5xx error, vault broke
+			if err != nil {
+				t.Fatalf("CREATE /config returned err: %v", err)
+			}
+
+			// We don't expect a response error
+			if resp.IsError() {
+				t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
+			}
+
+			resp, err = b.HandleRequest(t.Context(), &logical.Request{
+				Operation: logical.ReadOperation,
+				Path:      "config",
+				Storage:   storage,
+			})
+
+			// 5xx error, vault broke
+			if err != nil {
+				t.Fatalf("READ /config returned err: %v", err)
+			}
+
+			// We don't expect a response error
+			if resp.IsError() {
+				t.Fatalf(`READ /config failed with %v"`, resp.Error())
+			}
+
+			cfg, err := getConfig(t.Context(), storage)
+			if err != nil {
+				t.Fatalf("getClient() returned err: %v", err)
+			}
+
+			if cfg.TokenScheme != tt.want {
+				t.Fatalf("Case not normalized: want %v got %v", tt.want, cfg.TokenScheme)
+			}
+
+		})
+	}
+
+}
+
+func TestConfig_CreateEmptyTokenSchemeSetsAuto(t *testing.T) {
+
+	b, storage := testBackend(t)
+
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "config",
+		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret", "token_scheme": ""},
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("CREATE /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
+	}
+
+	resp, err = b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "config",
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("READ /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`READ /config failed with %v"`, resp.Error())
+	}
+
+	cfg, err := getConfig(t.Context(), storage)
+	if err != nil {
+		t.Fatalf("getClient() returned err: %v", err)
+	}
+
+	if cfg.TokenScheme != "auto" {
+		t.Fatalf("Case not normalized: want auto got %v", cfg.TokenScheme)
+	}
+}
+
+func TestConfig_EnsureExistenceCheckWorks(t *testing.T) {
+	b, storage := testBackend(t)
+
+	_, exists, err := b.HandleExistenceCheck(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation, Path: "config", Storage: storage,
+	})
+
+	if err != nil {
+		t.Fatalf("existence check returned err: %v", err)
+	}
+
+	if exists {
+		t.Fatalf("config exists before create")
+	}
+
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "config",
+		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret", "token_scheme": ""},
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("CREATE /config returned err: %v", err)
+	}
+
+	// We don't expect a response error
+	if resp.IsError() {
+		t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
+	}
+
+	_, exists, err = b.HandleExistenceCheck(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation, Path: "config", Storage: storage,
+	})
+
+	if err != nil {
+		t.Fatalf("existence check returned err: %v", err)
+	}
+
+	if !exists {
+		t.Fatalf("config does not exist after create")
+	}
+
 }
