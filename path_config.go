@@ -19,8 +19,8 @@ type netboxConfig struct {
 	URL         string `json:"url"`
 	Token       string `json:"token"`
 	InsecureTLS bool   `json:"insecure"`
-	CACert      string `json:"cacert"`
-	TokenScheme string `json:"tokenscheme"`
+	CACert      string `json:"ca_cert"`
+	TokenScheme string `json:"token_scheme"`
 }
 
 // pathConfig extends the Vault API with a `/config` endpoint for this backend
@@ -166,14 +166,14 @@ func (b *netboxBackend) pathConfigWrite(ctx context.Context, req *logical.Reques
 	if baseURL, ok := data.GetOk("url"); ok {
 		config.URL = baseURL.(string)
 	} else if createMode {
-		return nil, fmt.Errorf("missing url in configuration")
+		return logical.ErrorResponse(`You must provide a url.`), nil
 	}
 
 	// Field: Token (required)
 	if token, ok := data.GetOk("token"); ok {
 		config.Token = token.(string)
 	} else if createMode {
-		return nil, fmt.Errorf("missing token in configuration")
+		return logical.ErrorResponse(`You must provide a token.`), nil
 	}
 
 	// Field: InsecureTLS (not required, set default)
@@ -200,7 +200,7 @@ func (b *netboxBackend) pathConfigWrite(ctx context.Context, req *logical.Reques
 			case "auto", "v1", "v2":
 				config.TokenScheme = lowerScheme
 			default:
-				return nil, fmt.Errorf("token_scheme must be one of: auto, v1, v2")
+				return logical.ErrorResponse("Invalid token_scheme: %v. Must be one of: auto, v1, v2", tokenScheme.(string)), nil
 			}
 		}
 	} else if createMode {
