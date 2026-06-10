@@ -231,7 +231,7 @@ func TestConfig_UpdateSetsFields(t *testing.T) {
 }
 
 // Ensures we error if a URL isn't set
-func TestConfig_CreateReturnsUserErrorForMissingURL(t *testing.T) {
+func TestConfig_CreateReturnsFailsForMissingURL(t *testing.T) {
 	b, storage := testBackend(t)
 
 	// Create with missing URL
@@ -254,7 +254,7 @@ func TestConfig_CreateReturnsUserErrorForMissingURL(t *testing.T) {
 }
 
 // Ensures we error if a token isn't set
-func TestConfig_CreateReturnsUserErrorForMissingToken(t *testing.T) {
+func TestConfig_CreateReturnsFailsForMissingToken(t *testing.T) {
 	b, storage := testBackend(t)
 
 	// Create with missing URL
