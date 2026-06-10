@@ -29,6 +29,12 @@ type netboxBackend struct {
 	client             *netboxClient // this is our code
 }
 
+const rootHelp = `
+The Netbox secrets backend dynamically generates API tokens. 
+Use config/ to set the netbox url and admin credentials with permissions to generate tokens.
+Then create a role/<name> to configure a username to generate a token for.
+Call creds/<role> to generate a token.`
+
 // This func wires up our backend struct and provides config for our plugin
 func backend() *netboxBackend {
 	b := netboxBackend{}
