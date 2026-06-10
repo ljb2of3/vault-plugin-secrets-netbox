@@ -18,10 +18,9 @@ import (
 )
 
 type netboxClient struct {
-	baseURL     string
-	token       string
-	httpClient  *http.Client
-	tokenScheme string
+	baseURL    string
+	token      string
+	httpClient *http.Client
 }
 
 func (b *netboxBackend) getClient(ctx context.Context, s logical.Storage) (*netboxClient, error) {
@@ -89,7 +88,6 @@ func newClient(config *netboxConfig) (*netboxClient, error) {
 			Timeout:   30 * time.Second,
 			Transport: &http.Transport{TLSClientConfig: tlsConfig},
 		},
-		tokenScheme: config.TokenScheme,
 	}, nil
 }
 
@@ -112,7 +110,7 @@ func (c *netboxClient) rawRequest(ctx context.Context, method string, path strin
 	}
 
 	// Set the auth header
-	if c.tokenScheme == "v2" || (c.tokenScheme == "auto" && strings.HasPrefix(c.token, "nbt_")) {
+	if strings.HasPrefix(c.token, "nbt_") {
 		// Netbox v2 token
 		req.Header.Set("Authorization", strings.Join([]string{"Bearer", c.token}, " "))
 	} else {
