@@ -32,8 +32,8 @@ func TestRole_CreateSetsFields(t *testing.T) {
 			expectNorm: map[string]any{"allowed_ips": []string{"1.1.1.1/32"}},
 		},
 		{
-			name:   "token_version",
-			create: map[string]any{"username": "test", "token_version": 1},
+			name:   "version",
+			create: map[string]any{"username": "test", "version": 1},
 		},
 		{
 			name:       "ttl",
@@ -95,7 +95,7 @@ func TestRole_CreateSetsFields(t *testing.T) {
 			}
 
 			// Loop over optional scalar fields
-			for _, i := range []string{"write_enabled", "description", "token_version"} {
+			for _, i := range []string{"write_enabled", "description", "version"} {
 				if _, ok := tt.create[i]; ok {
 					if _, ok = resp.Data[i]; ok {
 						if tt.create[i] != resp.Data[i] {
@@ -170,9 +170,9 @@ func TestRole_UpdateSetsFields(t *testing.T) {
 			expectNorm: map[string]any{"allowed_ips": []string{"2.2.2.2/32"}, "ttl": 1 * time.Hour},
 		},
 		{
-			name:   "token_version",
-			create: map[string]any{"username": "test", "token_version": 1},
-			update: map[string]any{"token_version": 2},
+			name:   "version",
+			create: map[string]any{"username": "test", "version": 1},
+			update: map[string]any{"version": 2},
 		},
 		{
 			name:       "ttl",
@@ -248,7 +248,7 @@ func TestRole_UpdateSetsFields(t *testing.T) {
 			// Now the REAL tests...
 
 			// Loop over all scalar fields
-			for _, i := range []string{"username", "write_enabled", "description", "token_version"} {
+			for _, i := range []string{"username", "write_enabled", "description", "version"} {
 				if _, ok := tt.update[i]; ok { // if it's in the update list, check that value
 					if _, ok = resp.Data[i]; ok {
 						if tt.update[i] != resp.Data[i] {
