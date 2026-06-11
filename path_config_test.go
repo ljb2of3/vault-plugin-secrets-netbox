@@ -29,7 +29,7 @@ func TestConfig_CreateSetsFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b, storage := testBackend(t)
 
-			// Write test data. Sucessful CREATEs apparently return nil,nil
+			// Write test data. Successful CREATEs apparently return nil,nil
 			resp, err := b.HandleRequest(t.Context(), &logical.Request{
 				Operation: logical.CreateOperation,
 				Path:      "config",
@@ -135,7 +135,7 @@ func TestConfig_UpdateSetsFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b, storage := testBackend(t)
 
-			// Write test data. Sucessful CREATEs apparently return nil,nil
+			// Write test data. Successful CREATEs apparently return nil,nil
 			resp, err := b.HandleRequest(t.Context(), &logical.Request{
 				Operation: logical.CreateOperation,
 				Path:      "config",
