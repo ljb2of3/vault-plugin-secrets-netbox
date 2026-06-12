@@ -63,3 +63,19 @@ func assertUserError(t *testing.T, resp *logical.Response, mustContain string) {
 		t.Fatalf("user error %q did not mention %q", msg, mustContain)
 	}
 }
+
+func assertSingleWarning(t *testing.T, resp *logical.Response, mustContain string) {
+	t.Helper()
+	if resp == nil {
+		t.Fatalf("got nil, want resp")
+	}
+
+	// We expect exactly one warning
+	if len(resp.Warnings) != 1 {
+		t.Fatalf("got %d warnings, want 1: %q", len(resp.Warnings), resp.Warnings)
+	}
+
+	if !strings.Contains(strings.ToLower(resp.Warnings[0]), strings.ToLower(mustContain)) {
+		t.Fatalf("%q not in warning, got %q", mustContain, resp.Warnings[0])
+	}
+}
