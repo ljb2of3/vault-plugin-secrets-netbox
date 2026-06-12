@@ -7,33 +7,317 @@ import (
 	"net"
 	"time"
 
+	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
 const (
-	roleStoragePath = "role" // vault gives us a kv store, where are we storing our config?
+	roleStorageBase = "role" // vault gives us a kv store, where are we storing our roles?
 )
 
-// the json blob that will be written to vault to store our configuration
-type roleConfig struct {
+// the json blob that will be written to vault to store our role
+type netboxRole struct {
 	Username     string        `json:"username"`
 	WriteEnabled bool          `json:"write_enabled"`
 	Description  string        `json:"description"`
 	AllowedIPs   []string      `json:"allowed_ips"`
-	TokenVersion int           `json:"token_version"`
+	Version      int           `json:"version"`
 	TTL          time.Duration `json:"ttl"`
 	MaxTTL       time.Duration `json:"max_ttl"`
 }
 
-func getRole(ctx context.Context, s logical.Storage, name string) (*roleConfig, error) {
+// <mount>/role/*
+const pathRoleHelpSynopsis = `
+Configure netbox roles`
+
+const pathRoleHelpDescription = `
+Each role maps to a specific netbox username, and has various config options. 
+Multiple roles may point at the same user with different settings.`
+
+func pathRole(b *netboxBackend) []*framework.Path {
+	return []*framework.Path{
+		{
+			Pattern: "role/" + framework.GenericNameRegex("name"),
+			Fields: map[string]*framework.FieldSchema{
+				"name": {
+					Type:     framework.TypeLowerCaseString,
+					Required: true,
+				},
+				"username": {
+					Type:        framework.TypeString,
+					Description: "The netbox user assigned to the token minted.",
+					Required:    true,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name: "username",
+					},
+				},
+				"write_enabled": {
+					Type:        framework.TypeBool,
+					Description: "Minted token has write access.",
+					Default:     false,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name: "Write Enabled",
+					},
+				},
+				"description": {
+					Type:        framework.TypeString,
+					Description: "Description set on minted token.",
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name: "Description",
+					},
+				},
+				"allowed_ips": {
+					Type:        framework.TypeCommaStringSlice,
+					Description: "CIDR networks that are allowed to use minted token.",
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name: "Allowed IPs",
+					},
+				},
+				"version": {
+					Type:        framework.TypeInt,
+					Description: "Version of token to mint. Allowed values are 1, 2, or 0, which defaults to the best supported by your version of netbox. Version 2 requires Netbox 4.5+",
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name: "Version",
+					},
+					AllowedValues: []any{0, 1, 2},
+				},
+				"ttl": {
+					Type:        framework.TypeDurationSecond,
+					Description: "Default lease for generated credentials. If not set or set to 0, will use system default.",
+				},
+				"max_ttl": {
+					Type:        framework.TypeDurationSecond,
+					Description: "Maximum time for role. If not set or set to 0, will use system default.",
+				},
+			},
+
+			// Map CRUD operations to our functions
+			Operations: map[logical.Operation]framework.OperationHandler{
+				logical.ReadOperation: &framework.PathOperation{
+					Callback: b.pathRoleRead,
+				},
+				logical.CreateOperation: &framework.PathOperation{
+					Callback: b.pathRoleWrite,
+				},
+				logical.UpdateOperation: &framework.PathOperation{
+					Callback: b.pathRoleWrite,
+				},
+				logical.DeleteOperation: &framework.PathOperation{
+					Callback: b.pathRoleDelete,
+				},
+			},
+
+			// func to check to see if the role exists
+			ExistenceCheck: b.pathRoleExistenceCheck,
+
+			// help text (defined in help_text.go)
+			HelpSynopsis:    pathRoleHelpSynopsis,
+			HelpDescription: pathRoleHelpDescription,
+		},
+	}
+}
+
+func getRole(ctx context.Context, s logical.Storage, name string) (*netboxRole, error) {
+	// Fetch role (json) from vault storage
+	entry, err := s.Get(ctx, roleStoragePath(name))
+
+	// Error fetching from storage
+	if err != nil {
+		return nil, err
+	}
+
+	// No role
+	if entry == nil {
+		return nil, nil
+	}
+
+	// Create our struct, and decode the json
+	role := new(netboxRole)
+
+	err = entry.DecodeJSON(&role)
+	if err != nil {
+		return nil, fmt.Errorf("error reading role %q: %w", name, err)
+	}
+
+	// Return the role
+	return role, nil
+}
+
+func (b *netboxBackend) pathRoleRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	name, ok := data.GetOk("name")
+	if !ok {
+		return nil, errNameNotSet
+	}
+
+	role, err := getRole(ctx, req.Storage, name.(string))
+	if err != nil {
+		return nil, err
+	}
+
+	if role == nil {
+		return nil, nil
+	}
+
+	return &logical.Response{
+		Data: map[string]interface{}{
+			"username":      role.Username,
+			"write_enabled": role.WriteEnabled,
+			"description":   role.Description,
+			"allowed_ips":   role.AllowedIPs,
+			"version":       role.Version,
+			"ttl":           role.TTL.Seconds(),
+			"max_ttl":       role.MaxTTL.Seconds(),
+		},
+	}, nil
+}
+
+func (b *netboxBackend) pathRoleWrite(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	var role *netboxRole
+	var createMode bool
+
+	name, ok := data.GetOk("name")
+	if !ok {
+		return nil, errNameNotSet
+	}
+
+	switch req.Operation {
+	case logical.CreateOperation: // Create Op, make a blank role
+		createMode = true
+		role = new(netboxRole)
+	case logical.UpdateOperation: // Update Op, load existing role
+		createMode = false
+		existing, err := getRole(ctx, req.Storage, name.(string))
+		if err != nil {
+			return nil, err
+		}
+		if existing == nil {
+			return nil, fmt.Errorf("role %q not found during update operation", name)
+		}
+		role = existing
+	default: // How did we end up here?
+		return nil, errors.New("role write called on unsupported operation")
+	}
+
+	// Field: Username (required)
+	// Only check that it's sent in create mode. Validation later
+	if _, ok := data.GetOk("username"); !ok && createMode {
+		return logical.ErrorResponse(`You must provide a username.`), nil
+	}
+
+	// Field: WriteEnabled (not required, set default)
+	if writeEnabled, ok := data.GetOk("write_enabled"); ok {
+		role.WriteEnabled = writeEnabled.(bool)
+	} else if createMode {
+		role.WriteEnabled = data.GetDefaultOrZero("write_enabled").(bool)
+	}
+
+	// Field: Description (not required, set default)
+	if description, ok := data.GetOk("description"); ok {
+		role.Description = description.(string)
+	} else if createMode {
+		role.Description = data.GetDefaultOrZero("description").(string)
+	}
+
+	// Field: AllowedIPs (not required, set default)
+	if allowedIPs, ok := data.GetOk("allowed_ips"); ok {
+		role.AllowedIPs = []string{}
+		// Validate IPs
+		for _, x := range allowedIPs.([]string) {
+			if err := validateAllowedIP(x); err != nil {
+				return logical.ErrorResponse(fmt.Sprintf("%v", err)), nil
+			}
+			role.AllowedIPs = append(role.AllowedIPs, x)
+		}
+	} else if createMode {
+		role.AllowedIPs = []string{}
+	}
+
+	// Field: Version (not required, set default)
+	if version, ok := data.GetOk("version"); ok {
+		switch version.(int) {
+		case 0, 1, 2:
+			role.Version = version.(int)
+		default:
+			return logical.ErrorResponse("version must be one of: 0, 1, 2"), nil
+		}
+	} else if createMode {
+		role.Version = data.GetDefaultOrZero("version").(int)
+	}
+
+	// Field: TTL (not required, set default)
+	if ttl, ok := data.GetOk("ttl"); ok {
+		role.TTL = time.Duration(ttl.(int)) * time.Second
+	} else if createMode {
+		role.TTL = 0 * time.Second
+	}
+
+	// Field: Max TTL (not required, set default)
+	if maxTTL, ok := data.GetOk("max_ttl"); ok {
+		role.MaxTTL = time.Duration(maxTTL.(int)) * time.Second
+	} else if createMode {
+		role.MaxTTL = 0 * time.Second
+	}
+
+	// Field: Username (required)
+	// Existence check on create happened earlier
+	if username, ok := data.GetOk("username"); ok {
+		c, err := b.getClient(ctx, req.Storage)
+		if err != nil {
+			return nil, err
+		}
+		_, err = c.resolveUserID(ctx, username.(string))
+		if err != nil {
+			if errors.Is(err, errUserNotFound) {
+				return logical.ErrorResponse(fmt.Sprintf("%q not a valid netbox user", username.(string))), nil
+			}
+			return nil, err
+		}
+		role.Username = username.(string)
+	}
+
+	entry, err := logical.StorageEntryJSON(roleStoragePath(name), role)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := req.Storage.Put(ctx, entry); err != nil {
+		return nil, err
+	}
+
 	return nil, nil
+}
+
+func (b *netboxBackend) pathRoleDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	name, ok := data.GetOk("name")
+	if !ok {
+		return nil, errNameNotSet
+	}
+
+	err := req.Storage.Delete(ctx, roleStoragePath(name))
+
+	return nil, err
+}
+
+// pathRoleExistenceCheck verifies if the role exists.
+func (b *netboxBackend) pathRoleExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
+	name, ok := data.GetOk("name")
+	if !ok {
+		return false, errNameNotSet
+	}
+
+	out, err := req.Storage.Get(ctx, roleStoragePath(name))
+	if err != nil {
+		return false, fmt.Errorf("existence check failed: %w", err)
+	}
+
+	return out != nil, nil
 }
 
 func validateAllowedIP(input string) error {
 	ip, network, err := net.ParseCIDR(input)
 
 	if err != nil {
-		return fmt.Errorf("%q: %w", input, err)
+		return err
 	}
 
 	if !network.IP.Equal(ip) {
@@ -43,4 +327,9 @@ func validateAllowedIP(input string) error {
 	return nil
 }
 
+func roleStoragePath(name any) string {
+	return roleStorageBase + "/" + name.(string)
+}
+
 var errHostBitsSet = errors.New("network contains host bits")
+var errNameNotSet = errors.New("name not set")
