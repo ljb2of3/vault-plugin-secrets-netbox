@@ -379,15 +379,122 @@ func TestRole_CreateValidatesUsername(t *testing.T) {
 }
 
 func TestRole_CreateWarnsForUnknownUser(t *testing.T) {
-	t.Skip("Not implemented")
+	b, storage, _ := testBackendWithNetbox(t, netboxNoUsers)
+
+	// Write test data. Successful CREATEs apparently return nil,nil
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "role/test",
+		Data:      map[string]any{"username": "test"},
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("create returned err, %v", err)
+	}
+
+	// 4xx error, bad user input
+	if resp.IsError() {
+		t.Fatalf("create failed, %v", resp.Error())
+	}
+
+	// Expect warning `User "test" not found in netbox. Be sure to configure your user befor minting tokens.`
+	assertSingleWarning(t, resp, `"test" not a valid`)
+
+	// Validate role was actually written
+	role, err := getRole(t.Context(), storage, "test")
+	if err != nil {
+		t.Fatalf("getRole after warn returned err: %v", err)
+	}
+
+	if role == nil {
+		t.Fatalf("role was not persisted despite warning")
+	}
+
+	if role.Username != "test" {
+		t.Fatalf("persisted username = %q, want %q", role.Username, "test")
+	}
+
 }
 
 func TestRole_CreateWarnsWhenNetboxUnreachable(t *testing.T) {
-	t.Skip("Not implemented")
+	b, storage, srv := testBackendWithNetbox(t, netboxNoUsers)
+	srv.Close()
+
+	// Write test data
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "role/test",
+		Data:      map[string]any{"username": "test"},
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("create returned err, %v", err)
+	}
+
+	// 4xx error, bad user input
+	if resp.IsError() {
+		t.Fatalf("create failed, %v", resp.Error())
+	}
+
+	// Expect warning `Unable to validate username because netbox was unreachable`
+	assertSingleWarning(t, resp, `netbox was unreachable`)
+
+	// Validate role was actually written
+	role, err := getRole(t.Context(), storage, "test")
+	if err != nil {
+		t.Fatalf("getRole after warn returned err: %v", err)
+	}
+
+	if role == nil {
+		t.Fatalf("role was not persisted despite warning")
+	}
+
+	if role.Username != "test" {
+		t.Fatalf("persisted username = %q, want %q", role.Username, "test")
+	}
 }
 
 func TestRole_CreateWarnsWhenNotConfigured(t *testing.T) {
-	t.Skip("Not implemented")
+	b, storage := testBackend(t)
+
+	// Write test data
+	resp, err := b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "role/test",
+		Data:      map[string]any{"username": "test"},
+		Storage:   storage,
+	})
+
+	// 5xx error, vault broke
+	if err != nil {
+		t.Fatalf("create returned err, %v", err)
+	}
+
+	// 4xx error, bad user input
+	if resp.IsError() {
+		t.Fatalf("create failed, %v", resp.Error())
+	}
+
+	// Expect warning `Netbox backend not configured. Be sure to write to /config before minting tokens.`
+	assertSingleWarning(t, resp, `not configured`)
+
+	// Validate role was actually written
+	role, err := getRole(t.Context(), storage, "test")
+	if err != nil {
+		t.Fatalf("getRole after warn returned err: %v", err)
+	}
+
+	if role == nil {
+		t.Fatalf("role was not persisted despite warning")
+	}
+
+	if role.Username != "test" {
+		t.Fatalf("persisted username = %q, want %q", role.Username, "test")
+	}
 }
 
 func TestRole_CreateInvalidIPsFails(t *testing.T) {

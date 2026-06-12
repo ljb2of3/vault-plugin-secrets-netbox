@@ -172,6 +172,7 @@ func (b *netboxBackend) pathRoleRead(ctx context.Context, req *logical.Request, 
 }
 
 func (b *netboxBackend) pathRoleWrite(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	var resp = &logical.Response{}
 	var role *netboxRole
 	var createMode bool
 
@@ -261,16 +262,26 @@ func (b *netboxBackend) pathRoleWrite(ctx context.Context, req *logical.Request,
 	// Field: Username (required)
 	// Existence check on create happened earlier
 	if username, ok := data.GetOk("username"); ok {
-		c, err := b.getClient(ctx, req.Storage)
-		if err != nil {
-			return nil, err
-		}
-		_, err = c.resolveUserID(ctx, username.(string))
-		if err != nil {
-			if errors.Is(err, errUserNotFound) {
-				return logical.ErrorResponse(fmt.Sprintf("%q not a valid netbox user", username.(string))), nil
+		// Closure to capture multiple errors for one switch below
+		err := func() error {
+			c, err := b.getClient(ctx, req.Storage)
+			if err != nil {
+				return err
 			}
-			return nil, err
+			_, err = c.resolveUserID(ctx, username.(string))
+			return err
+		}()
+		if err != nil {
+			switch {
+			case errors.Is(err, errNetboxNotConfigured):
+				resp.AddWarning("Netbox backend not configured. Be sure to write to /config before minting tokens.")
+			case errors.Is(err, errRequestFailure):
+				resp.AddWarning(fmt.Sprintf("Unable to validate username because netbox was unreachable: %v", err))
+			case errors.Is(err, errUserNotFound):
+				resp.AddWarning(fmt.Sprintf("%q not a valid netbox user. Create netbox user before minting tokens.", username.(string)))
+			default:
+				return nil, err
+			}
 		}
 		role.Username = username.(string)
 	}
@@ -284,7 +295,7 @@ func (b *netboxBackend) pathRoleWrite(ctx context.Context, req *logical.Request,
 		return nil, err
 	}
 
-	return nil, nil
+	return resp, nil
 }
 
 func (b *netboxBackend) pathRoleDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
