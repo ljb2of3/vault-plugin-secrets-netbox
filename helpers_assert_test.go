@@ -8,7 +8,15 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-// Asserts that we did not receive an error
+// Asserts that we received a fatal error
+func assertFatal(t *testing.T, resp *logical.Response, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("want fatal err, got nil (resp=%v)", resp)
+	}
+}
+
+// Asserts that we did not receive an fatal error
 func assertNotFatal(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
