@@ -231,7 +231,7 @@ func TestConfig_UpdateSetsFields(t *testing.T) {
 }
 
 // Ensures we error if a URL isn't set
-func TestConfig_CreateReturnsFailsForMissingURL(t *testing.T) {
+func TestConfig_CreateFailsForMissingURL(t *testing.T) {
 	b, storage := testBackend(t)
 
 	// Create with missing URL
@@ -254,7 +254,7 @@ func TestConfig_CreateReturnsFailsForMissingURL(t *testing.T) {
 }
 
 // Ensures we error if a token isn't set
-func TestConfig_CreateReturnsFailsForMissingToken(t *testing.T) {
+func TestConfig_CreateFailsForMissingToken(t *testing.T) {
 	b, storage := testBackend(t)
 
 	// Create with missing URL
@@ -287,15 +287,7 @@ func TestConfig_CreateSetsDefaults(t *testing.T) {
 		Storage:   storage,
 	})
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("CREATE /config returned err: %v", err)
-	}
-
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
-	}
+	assertOK(t, resp, err)
 
 	resp, err = b.HandleRequest(t.Context(), &logical.Request{
 		Operation: logical.ReadOperation,
@@ -303,24 +295,10 @@ func TestConfig_CreateSetsDefaults(t *testing.T) {
 		Storage:   storage,
 	})
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("READ /config returned err: %v", err)
-	}
+	assertOK(t, resp, err)
 
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`READ /config failed with %v"`, resp.Error())
-	}
-
-	// Validate defaults
-	if resp.Data["insecure"] != false {
-		t.Fatalf(`CREATE /config didn't set default for "insecure": wanted false, got %v`, resp.Data["insecure"])
-	}
-
-	if resp.Data["ca_cert"] != "" {
-		t.Fatalf(`CREATE /config didn't set default for "ca_cert": wanted , got %v`, resp.Data["ca_cert"])
-	}
+	assertDefault(t, resp, "insecure", false)
+	assertDefault(t, resp, "ca_cert", "")
 }
 
 func TestConfig_ReadAfterDeleteReturnsNil(t *testing.T) {
