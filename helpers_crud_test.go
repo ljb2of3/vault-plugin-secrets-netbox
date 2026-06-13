@@ -7,6 +7,54 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
+// Creates the config
+func configCreate(t *testing.T, b *netboxBackend, s logical.Storage, data map[string]any) (*logical.Response, error) {
+	t.Helper()
+	return b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "config",
+		Data:      data,
+		Storage:   s,
+	})
+}
+
+// Updates the config
+func configUpdate(t *testing.T, b *netboxBackend, s logical.Storage, data map[string]any) (*logical.Response, error) {
+	t.Helper()
+	return b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "config",
+		Data:      data,
+		Storage:   s,
+	})
+}
+
+// Reads the config
+func configRead(t *testing.T, b *netboxBackend, s logical.Storage) (*logical.Response, error) {
+	t.Helper()
+	return b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "config",
+		Storage:   s,
+	})
+}
+
+// Deletes the config
+func configDelete(t *testing.T, b *netboxBackend, s logical.Storage) (*logical.Response, error) {
+	t.Helper()
+	return b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.DeleteOperation,
+		Path:      "config",
+		Storage:   s,
+	})
+}
+
+// Creates the config with default settings
+func configCreateDefault(t *testing.T, b *netboxBackend, s logical.Storage) (*logical.Response, error) {
+	t.Helper()
+	return configCreate(t, b, s, map[string]any{"url": "https://nb.example.com", "token": "secret"})
+}
+
 // Creates a role
 func roleCreate(t *testing.T, b *netboxBackend, s logical.Storage, name string, data map[string]any) (*logical.Response, error) {
 	t.Helper()
@@ -16,12 +64,6 @@ func roleCreate(t *testing.T, b *netboxBackend, s logical.Storage, name string, 
 		Data:      data,
 		Storage:   s,
 	})
-}
-
-// Creates a role "test" with default values (username "test")
-func roleCreateDefault(t *testing.T, b *netboxBackend, s logical.Storage) (*logical.Response, error) {
-	t.Helper()
-	return roleCreate(t, b, s, "test", map[string]any{"username": "test"})
 }
 
 // Updates a role
@@ -35,6 +77,7 @@ func roleUpdate(t *testing.T, b *netboxBackend, s logical.Storage, name string, 
 	})
 }
 
+// Reads a role
 func roleRead(t *testing.T, b *netboxBackend, s logical.Storage, name string) (*logical.Response, error) {
 	t.Helper()
 	return b.HandleRequest(t.Context(), &logical.Request{
@@ -44,6 +87,7 @@ func roleRead(t *testing.T, b *netboxBackend, s logical.Storage, name string) (*
 	})
 }
 
+// Deletes a role
 func roleDelete(t *testing.T, b *netboxBackend, s logical.Storage, name string) (*logical.Response, error) {
 	t.Helper()
 	return b.HandleRequest(t.Context(), &logical.Request{
@@ -53,6 +97,7 @@ func roleDelete(t *testing.T, b *netboxBackend, s logical.Storage, name string) 
 	})
 }
 
+// Lists roles
 func roleList(t *testing.T, b *netboxBackend, s logical.Storage) (*logical.Response, error) {
 	t.Helper()
 	return b.HandleRequest(t.Context(), &logical.Request{
@@ -60,4 +105,10 @@ func roleList(t *testing.T, b *netboxBackend, s logical.Storage) (*logical.Respo
 		Path:      "role",
 		Storage:   s,
 	})
+}
+
+// Creates a role "test" with default values (username "test")
+func roleCreateDefault(t *testing.T, b *netboxBackend, s logical.Storage) (*logical.Response, error) {
+	t.Helper()
+	return roleCreate(t, b, s, "test", map[string]any{"username": "test"})
 }
