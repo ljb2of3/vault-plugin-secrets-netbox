@@ -58,12 +58,12 @@ func TestRole_CreateOKSetsFields(t *testing.T) {
 			backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
 
 			// Write test data. Successful CREATEs apparently return nil,nil
-			resp, err := roleCreate(t, backend, storage, tt.create)
+			resp, err := roleCreate(t, backend, storage, "test", tt.create)
 
 			assertOK(t, resp, err)
 
 			// Read it back
-			resp, err = roleRead(t, backend, storage)
+			resp, err = roleRead(t, backend, storage, "test")
 
 			assertOK(t, resp, err)
 
@@ -180,17 +180,17 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 			backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
 
 			// Create a role
-			resp, err := roleCreate(t, backend, storage, tt.create)
+			resp, err := roleCreate(t, backend, storage, "test", tt.create)
 
 			assertOK(t, resp, err)
 
 			// Do an update
-			resp, err = roleUpdate(t, backend, storage, tt.update)
+			resp, err = roleUpdate(t, backend, storage, "test", tt.update)
 
 			assertOK(t, resp, err)
 
 			// Read it back
-			resp, err = roleRead(t, backend, storage)
+			resp, err = roleRead(t, backend, storage, "test")
 
 			assertOK(t, resp, err)
 
@@ -256,7 +256,7 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 func TestRole_CreateErrorForMissingUsername(t *testing.T) {
 	backend, storage := testBackend(t)
 
-	resp, err := roleCreate(t, backend, storage, map[string]any{"write_enabled": true})
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"write_enabled": true})
 
 	assertError(t, resp, err, "username")
 }
@@ -270,7 +270,7 @@ func TestRole_CreateOKSetsDefaults(t *testing.T) {
 	assertOK(t, resp, err)
 
 	// Read test role
-	resp, err = roleRead(t, backend, storage)
+	resp, err = roleRead(t, backend, storage, "test")
 	assertOK(t, resp, err)
 
 	// Assert all default values were set as expected
@@ -291,11 +291,11 @@ func TestRole_ReadAfterDeleteReturnsNil(t *testing.T) {
 	assertOK(t, resp, err)
 
 	// Delete test role
-	resp, err = roleDelete(t, backend, storage)
+	resp, err = roleDelete(t, backend, storage, "test")
 	assertOK(t, resp, err)
 
 	// Read test role
-	resp, err = roleRead(t, backend, storage)
+	resp, err = roleRead(t, backend, storage, "test")
 	assertOK(t, resp, err)
 
 	// Assert read returned nil
@@ -313,11 +313,11 @@ func TestRole_DeleteIsIdempotent(t *testing.T) {
 	assertOK(t, resp, err)
 
 	// Delete test role
-	resp, err = roleDelete(t, backend, storage)
+	resp, err = roleDelete(t, backend, storage, "test")
 	assertOK(t, resp, err)
 
 	// Delete the role a second time
-	resp, err = roleDelete(t, backend, storage)
+	resp, err = roleDelete(t, backend, storage, "test")
 	assertOK(t, resp, err)
 }
 
@@ -326,7 +326,7 @@ func TestRole_ReadReturnsNilWhenNotExists(t *testing.T) {
 	backend, storage := testBackend(t)
 
 	// Read a role that doesn't exist
-	resp, err := roleRead(t, backend, storage)
+	resp, err := roleRead(t, backend, storage, "test")
 	assertOK(t, resp, err)
 
 	// Assert we actually got nil
@@ -484,7 +484,7 @@ func TestRole_CreateErrorForMissingCIDR(t *testing.T) {
 	backend, storage := testBackend(t)
 
 	// Create test role with invalid IP
-	resp, err := roleCreate(t, backend, storage, map[string]any{"username": "test", "allowed_ips": "1.1.1.1"})
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "allowed_ips": "1.1.1.1"})
 
 	// Assert we got an error about the missing cidr mask
 	assertError(t, resp, err, "invalid cidr address")
@@ -495,7 +495,7 @@ func TestRole_CreateErrorForHostBits(t *testing.T) {
 	backend, storage := testBackend(t)
 
 	// Create test role with invalid IP
-	resp, err := roleCreate(t, backend, storage, map[string]any{"username": "test", "allowed_ips": "1.1.1.1/24"})
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "allowed_ips": "1.1.1.1/24"})
 
 	// Assert we got an error about the host bits being set
 	assertError(t, resp, err, "host bits")
@@ -506,18 +506,85 @@ func TestRole_CreateErrorForInvalidTokenVersion(t *testing.T) {
 	backend, storage := testBackend(t)
 
 	// Create test role with invalid token version
-	resp, err := roleCreate(t, backend, storage, map[string]any{"username": "test", "version": 3})
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 3})
 
 	// Assert we got an error about the wrong token version
 	assertError(t, resp, err, "version must")
 }
 
 func TestRole_ListReturnsRoleNames(t *testing.T) {
-	t.Skip("Not implemented")
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write test role
+	resp, err := roleCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// List roles
+	resp, err = roleList(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Assert role is listed
+	assertListKeys(t, resp, []string{"test"})
 }
 
 func TestRole_ListReturnsEmptyWhenNoRoles(t *testing.T) {
-	t.Skip("Not implemented")
+	// Create mock backend
+	backend, storage := testBackend(t)
+
+	// List roles
+	resp, err := roleList(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Assert we got nothing back
+	if _, ok := resp.Data["keys"]; ok {
+		t.Fatalf("want false, got true")
+	}
+}
+
+func TestRole_ListReturnsMultipleSorted(t *testing.T) {
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write three roles
+	resp, err := roleCreate(t, backend, storage, "c", map[string]any{"username": "a"})
+	assertOK(t, resp, err)
+
+	resp, err = roleCreate(t, backend, storage, "a", map[string]any{"username": "a"})
+	assertOK(t, resp, err)
+
+	resp, err = roleCreate(t, backend, storage, "b", map[string]any{"username": "b"})
+	assertOK(t, resp, err)
+
+	// List roles
+	resp, err = roleList(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Assert roles are sorted
+	assertListKeys(t, resp, []string{"a", "b", "c"})
+}
+
+func TestRole_ListExcludesDeletedRole(t *testing.T) {
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write two roles
+	resp, err := roleCreate(t, backend, storage, "a", map[string]any{"username": "a"})
+	assertOK(t, resp, err)
+
+	resp, err = roleCreate(t, backend, storage, "b", map[string]any{"username": "b"})
+	assertOK(t, resp, err)
+
+	// Delete role b
+	resp, err = roleDelete(t, backend, storage, "b")
+	assertOK(t, resp, err)
+
+	// List roles
+	resp, err = roleList(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Assert that b doesn't show up in the list
+	assertListKeys(t, resp, []string{"a"})
 }
 
 func TestFuncValidateAllowedIP_ValidIPsReturnNoError(t *testing.T) {
