@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func TestRole_CreateSetsFields(t *testing.T) {
+func TestRole_CreateOKSetsFields(t *testing.T) {
 	tests := []struct {
 		name       string
 		create     map[string]any
@@ -55,42 +55,17 @@ func TestRole_CreateSetsFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+			backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
 
 			// Write test data. Successful CREATEs apparently return nil,nil
-			resp, err := b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.CreateOperation,
-				Path:      "role/test",
-				Data:      tt.create,
-				Storage:   storage,
-			})
+			resp, err := roleCreate(t, backend, storage, tt.create)
 
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("CREATE /role/test returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("CREATE /role/test returned 4xx error, %v", resp.Error())
-			}
+			assertOK(t, resp, err)
 
 			// Read it back
-			resp, err = b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.ReadOperation,
-				Path:      "role/test",
-				Storage:   storage,
-			})
+			resp, err = roleRead(t, backend, storage)
 
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("READ /role/test returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("READ /role/test returned 4xx error, %v", resp.Error())
-			}
+			assertOK(t, resp, err)
 
 			// Now the REAL tests...
 
@@ -147,7 +122,7 @@ func TestRole_CreateSetsFields(t *testing.T) {
 	}
 }
 
-func TestRole_UpdateSetsFields(t *testing.T) {
+func TestRole_UpdateOKSetsFields(t *testing.T) {
 	tests := []struct {
 		name       string
 		create     map[string]any
@@ -202,60 +177,22 @@ func TestRole_UpdateSetsFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+			backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
 
-			// Write test data. Successful CREATEs apparently return nil,nil
-			resp, err := b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.CreateOperation,
-				Path:      "role/test",
-				Data:      tt.create,
-				Storage:   storage,
-			})
+			// Create a role
+			resp, err := roleCreate(t, backend, storage, tt.create)
 
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("CREATE /role/test returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("CREATE /role/test returned 4xx error, %v", resp.Error())
-			}
+			assertOK(t, resp, err)
 
 			// Do an update
-			resp, err = b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.UpdateOperation,
-				Path:      "role/test",
-				Data:      tt.update,
-				Storage:   storage,
-			})
+			resp, err = roleUpdate(t, backend, storage, tt.update)
 
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("UPDATE /role/test returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("UPDATE /role/test returned 4xx error, %v", resp.Error())
-			}
+			assertOK(t, resp, err)
 
 			// Read it back
-			resp, err = b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.ReadOperation,
-				Path:      "role/test",
-				Storage:   storage,
-			})
+			resp, err = roleRead(t, backend, storage)
 
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("READ /role/test returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("READ /role/test returned 4xx error, %v", resp.Error())
-			}
+			assertOK(t, resp, err)
 
 			// Now the REAL tests...
 
@@ -316,93 +253,164 @@ func TestRole_UpdateSetsFields(t *testing.T) {
 	}
 }
 
-func TestRole_CreateFailsForMissingUsername(t *testing.T) {
-	t.Skip("Not implemented")
+func TestRole_CreateErrorForMissingUsername(t *testing.T) {
+	backend, storage := testBackend(t)
+
+	resp, err := roleCreate(t, backend, storage, map[string]any{"write_enabled": true})
+
+	assertError(t, resp, err, "username")
 }
 
-func TestRole_CreateSetsDefaults(t *testing.T) {
-	t.Skip("Not implemented")
+func TestRole_CreateOKSetsDefaults(t *testing.T) {
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write test role
+	resp, err := roleCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Read test role
+	resp, err = roleRead(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Assert all default values were set as expected
+	assertDefault(t, resp, "write_enabled", false)
+	assertDefault(t, resp, "description", "")
+	assertDefault(t, resp, "version", 0)
+	assertDefault(t, resp, "allowed_ips", []string{})
+	assertDefault(t, resp, "ttl", float64(0))
+	assertDefault(t, resp, "max_ttl", float64(0))
 }
 
 func TestRole_ReadAfterDeleteReturnsNil(t *testing.T) {
-	t.Skip("Not implemented")
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write test role
+	resp, err := roleCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Delete test role
+	resp, err = roleDelete(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Read test role
+	resp, err = roleRead(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Assert read returned nil
+	if resp != nil {
+		t.Fatalf("got %v, want nil", resp)
+	}
 }
 
 func TestRole_DeleteIsIdempotent(t *testing.T) {
-	t.Skip("Not implemented")
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write a test role
+	resp, err := roleCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Delete test role
+	resp, err = roleDelete(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Delete the role a second time
+	resp, err = roleDelete(t, backend, storage)
+	assertOK(t, resp, err)
 }
 
-func TestRole_ReadReturnsNilWhenNotConfigured(t *testing.T) {
-	t.Skip("Not implemented")
+func TestRole_ReadReturnsNilWhenNotExists(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
+
+	// Read a role that doesn't exist
+	resp, err := roleRead(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Assert we actually got nil
+	if resp != nil {
+		t.Fatalf("got %v, want nil", resp)
+	}
 }
 
 func TestRole_EnsureExistenceCheckWorks(t *testing.T) {
-	t.Skip("Not implemented")
+	// Create mock backend
+	backend, storage := testBackend(t)
+
+	// Check to see if test role exists
+	_, exists, err := backend.HandleExistenceCheck(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation, Path: "role/test", Storage: storage,
+	})
+
+	// Assert that the role does not exist
+	if err != nil {
+		t.Fatalf("existence check returned err: %v", err)
+	}
+
+	if exists {
+		t.Fatalf("role exists before create")
+	}
+
+	// Create test role
+	resp, err := roleCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
+
+	// Chceck again to see if role exists
+	_, exists, err = backend.HandleExistenceCheck(t.Context(), &logical.Request{
+		Operation: logical.CreateOperation, Path: "role/test", Storage: storage,
+	})
+
+	// Assert that the role exists
+	if err != nil {
+		t.Fatalf("existence check returned err: %v", err)
+	}
+
+	if !exists {
+		t.Fatalf("role does not exist after create")
+	}
 }
 
-func TestRole_CreateValidatesUsername(t *testing.T) {
+func TestRole_CreateOKValidatesUsername(t *testing.T) {
+	// Create backend handler we can watch
 	var gotUser string
-	hits := 0
+	var hits int
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		hits++
 		gotUser = r.URL.Query().Get("username")
 		netboxUserFound(w, r) // reuse the existing stub for the response body
 	}
 
-	b, storage, _ := testBackendWithNetbox(t, handler)
+	// Create mock backend with special handler
+	backend, storage, _ := testBackendWithNetbox(t, handler)
 
-	// Write test data. Successful CREATEs apparently return nil,nil
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "role/test",
-		Data:      map[string]any{"username": "test"},
-		Storage:   storage,
-	})
+	// Write test role
+	resp, err := roleCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("CREATE /role/test returned err %v", err)
-	}
-
-	// 4xx error, bad user input
-	if resp.IsError() {
-		t.Fatalf("CREATE /role/test returned 4xx error, %v", resp.Error())
-	}
-
+	// Assert create actually hit the backend to validate the username
 	if hits < 1 {
 		t.Fatalf("CREATE /role/test didn't validate username")
 	}
 
+	// Assert create validated the correct username
 	if gotUser != "test" {
 		t.Fatalf("CREATE /role/test validated wrong user, want %q, got %q", "test", gotUser)
 	}
 }
 
-func TestRole_CreateWarnsForUnknownUser(t *testing.T) {
-	b, storage, _ := testBackendWithNetbox(t, netboxNoUsers)
+func TestRole_CreateWarnForUnknownUser(t *testing.T) {
+	// Create mock backend that returns no users
+	backend, storage, _ := testBackendWithNetbox(t, netboxNoUsers)
 
-	// Write test data. Successful CREATEs apparently return nil,nil
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "role/test",
-		Data:      map[string]any{"username": "test"},
-		Storage:   storage,
-	})
+	// Write test role
+	resp, err := roleCreateDefault(t, backend, storage)
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("create returned err, %v", err)
-	}
+	// Assert we got a warning for the invalid user
+	assertSingleWarning(t, resp, err, `"test" not a valid`)
 
-	// 4xx error, bad user input
-	if resp.IsError() {
-		t.Fatalf("create failed, %v", resp.Error())
-	}
-
-	// Expect warning `User "test" not found in netbox. Be sure to configure your user befor minting tokens.`
-	assertSingleWarning(t, resp, `"test" not a valid`)
-
-	// Validate role was actually written
+	// Assert role was actually written
 	role, err := getRole(t.Context(), storage, "test")
 	if err != nil {
 		t.Fatalf("getRole after warn returned err: %v", err)
@@ -418,30 +426,18 @@ func TestRole_CreateWarnsForUnknownUser(t *testing.T) {
 
 }
 
-func TestRole_CreateWarnsWhenNetboxUnreachable(t *testing.T) {
-	b, storage, srv := testBackendWithNetbox(t, netboxNoUsers)
+func TestRole_CreateWarnWhenNetboxUnreachable(t *testing.T) {
+	// Create mock backend
+	backend, storage, srv := testBackendWithNetbox(t, netboxNoUsers)
+
+	// Shut down the backend
 	srv.Close()
 
-	// Write test data
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "role/test",
-		Data:      map[string]any{"username": "test"},
-		Storage:   storage,
-	})
+	// Create test role
+	resp, err := roleCreateDefault(t, backend, storage)
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("create returned err, %v", err)
-	}
-
-	// 4xx error, bad user input
-	if resp.IsError() {
-		t.Fatalf("create failed, %v", resp.Error())
-	}
-
-	// Expect warning `Unable to validate username because netbox was unreachable`
-	assertSingleWarning(t, resp, `netbox was unreachable`)
+	// Assert we got a warning about netbox being unreachable
+	assertSingleWarning(t, resp, err, `netbox was unreachable`)
 
 	// Validate role was actually written
 	role, err := getRole(t.Context(), storage, "test")
@@ -458,29 +454,15 @@ func TestRole_CreateWarnsWhenNetboxUnreachable(t *testing.T) {
 	}
 }
 
-func TestRole_CreateWarnsWhenNotConfigured(t *testing.T) {
-	b, storage := testBackend(t)
+func TestRole_CreateWarnWhenNotConfigured(t *testing.T) {
+	// Create mock backend without netbox
+	backend, storage := testBackend(t)
 
-	// Write test data
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "role/test",
-		Data:      map[string]any{"username": "test"},
-		Storage:   storage,
-	})
-
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("create returned err, %v", err)
-	}
-
-	// 4xx error, bad user input
-	if resp.IsError() {
-		t.Fatalf("create failed, %v", resp.Error())
-	}
+	// Write test role
+	resp, err := roleCreateDefault(t, backend, storage)
 
 	// Expect warning `Netbox backend not configured. Be sure to write to /config before minting tokens.`
-	assertSingleWarning(t, resp, `not configured`)
+	assertSingleWarning(t, resp, err, `not configured`)
 
 	// Validate role was actually written
 	role, err := getRole(t.Context(), storage, "test")
@@ -497,12 +479,37 @@ func TestRole_CreateWarnsWhenNotConfigured(t *testing.T) {
 	}
 }
 
-func TestRole_CreateInvalidIPsFails(t *testing.T) {
-	t.Skip("Not implemented")
+func TestRole_CreateErrorForMissingCIDR(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
+
+	// Create test role with invalid IP
+	resp, err := roleCreate(t, backend, storage, map[string]any{"username": "test", "allowed_ips": "1.1.1.1"})
+
+	// Assert we got an error about the missing cidr mask
+	assertError(t, resp, err, "invalid cidr address")
 }
 
-func TestRole_CreateRejectsInvalidTokenVersion(t *testing.T) {
-	t.Skip("Not implemented")
+func TestRole_CreateErrorForHostBits(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
+
+	// Create test role with invalid IP
+	resp, err := roleCreate(t, backend, storage, map[string]any{"username": "test", "allowed_ips": "1.1.1.1/24"})
+
+	// Assert we got an error about the host bits being set
+	assertError(t, resp, err, "host bits")
+}
+
+func TestRole_CreateErrorForInvalidTokenVersion(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
+
+	// Create test role with invalid token version
+	resp, err := roleCreate(t, backend, storage, map[string]any{"username": "test", "version": 3})
+
+	// Assert we got an error about the wrong token version
+	assertError(t, resp, err, "version must")
 }
 
 func TestRole_ListReturnsRoleNames(t *testing.T) {
