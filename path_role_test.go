@@ -628,3 +628,14 @@ func TestFuncValidateAllowedIP_InvalidIPsReturnError(t *testing.T) {
 		})
 	}
 }
+
+func TestRole_UpdateFatalWhenRoleMissing(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
+
+	// Update the config without creating it
+	resp, err := roleUpdate(t, backend, storage, "test", map[string]any{})
+
+	// Assert that this is fatal
+	assertFatal(t, resp, err)
+}
