@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	roleStorageBase = "role" // vault gives us a kv store, where are we storing our roles?
+	roleStorageBase = "role/" // vault gives us a kv store, where are we storing our roles?
 )
 
 // the json blob that will be written to vault to store our role
@@ -33,6 +33,12 @@ Configure netbox roles`
 const pathRoleHelpDescription = `
 Each role maps to a specific netbox username, and has various config options. 
 Multiple roles may point at the same user with different settings.`
+
+const pathRoleListHelpSynopsis = `
+List netbox roles`
+
+const pathRoleHelpListDescription = `
+Lists all configured netbox roles`
 
 func pathRole(b *netboxBackend) []*framework.Path {
 	return []*framework.Path{
@@ -113,6 +119,16 @@ func pathRole(b *netboxBackend) []*framework.Path {
 			// help text (defined in help_text.go)
 			HelpSynopsis:    pathRoleHelpSynopsis,
 			HelpDescription: pathRoleHelpDescription,
+		},
+		{
+			Pattern: "role/?$",
+			Operations: map[logical.Operation]framework.OperationHandler{
+				logical.ListOperation: &framework.PathOperation{
+					Callback: b.pathRoleList,
+				},
+			},
+			HelpSynopsis:    pathRoleListHelpSynopsis,
+			HelpDescription: pathRoleHelpListDescription,
 		},
 	}
 }
@@ -324,6 +340,14 @@ func (b *netboxBackend) pathRoleExistenceCheck(ctx context.Context, req *logical
 	return out != nil, nil
 }
 
+func (b *netboxBackend) pathRoleList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	roles, err := req.Storage.List(ctx, roleStorageBase)
+	if err != nil {
+		return nil, err
+	}
+	return logical.ListResponse(roles), nil
+}
+
 func validateAllowedIP(input string) error {
 	ip, network, err := net.ParseCIDR(input)
 
@@ -339,7 +363,7 @@ func validateAllowedIP(input string) error {
 }
 
 func roleStoragePath(name any) string {
-	return roleStorageBase + "/" + name.(string)
+	return roleStorageBase + name.(string)
 }
 
 var errHostBitsSet = errors.New("network contains host bits")
