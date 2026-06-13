@@ -53,7 +53,7 @@ func (b *netboxBackend) getClient(ctx context.Context, s logical.Storage) (*netb
 
 	// Check if our config is empty
 	if config == nil {
-		return nil, errors.New("netbox backend not configured")
+		return nil, errNetboxNotConfigured
 	}
 
 	// All good, create a client from our config
@@ -199,6 +199,7 @@ func (c *netboxClient) resolveUserID(ctx context.Context, username string) (int,
 }
 
 var (
+	errNetboxNotConfigured  = errors.New("netbox backend not configured")
 	errBuildingRequest      = errors.New("bad request")
 	errRequestFailure       = errors.New("request failure")
 	errUnexpectedStatus     = errors.New("unexpected status code")

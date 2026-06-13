@@ -44,8 +44,6 @@ func backend() *netboxBackend {
 		// Help is the help text that is shown when a help request is made
 		// on the root of this resource. The root help is special since we
 		// show all the paths that can be requested.
-		//
-		// rootHelp is defined in help_text.go
 		Help: strings.TrimSpace(rootHelp),
 
 		// Paths are the various routes that the backend responds to.
@@ -56,6 +54,7 @@ func backend() *netboxBackend {
 		// PathsSpecial is the list of path patterns that denote the paths above
 		// that require special privileges.
 		Paths: framework.PathAppend(
+			pathRole(&b),
 			[]*framework.Path{
 				pathConfig(&b),
 			},
