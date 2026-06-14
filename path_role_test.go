@@ -24,10 +24,6 @@ func TestRole_CreateOKSetsFields(t *testing.T) {
 			create: map[string]any{"username": "test", "write_enabled": true},
 		},
 		{
-			name:   "description",
-			create: map[string]any{"username": "test", "description": "a test role"},
-		},
-		{
 			name:       "allowed_ips",
 			create:     map[string]any{"username": "test", "allowed_ips": "1.1.1.1/32"},
 			expectNorm: map[string]any{"allowed_ips": []string{"1.1.1.1/32"}},
@@ -76,7 +72,7 @@ func TestRole_CreateOKSetsFields(t *testing.T) {
 			}
 
 			// Loop over optional scalar fields
-			for _, i := range []string{"write_enabled", "description", "version"} {
+			for _, i := range []string{"write_enabled", "version"} {
 				if _, ok := tt.create[i]; ok {
 					if _, ok = resp.Data[i]; ok {
 						if tt.create[i] != resp.Data[i] {
@@ -140,11 +136,6 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 			update: map[string]any{"write_enabled": false},
 		},
 		{
-			name:   "description",
-			create: map[string]any{"username": "test", "description": "a test role"},
-			update: map[string]any{"description": "updated test role"},
-		},
-		{
 			name:       "allowed_ips",
 			create:     map[string]any{"username": "test", "allowed_ips": "1.1.1.1/32", "ttl": "1h"},
 			update:     map[string]any{"allowed_ips": "2.2.2.2/32"},
@@ -197,7 +188,7 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 			// Now the REAL tests...
 
 			// Loop over all scalar fields
-			for _, i := range []string{"username", "write_enabled", "description", "version"} {
+			for _, i := range []string{"username", "write_enabled", "version"} {
 				if _, ok := tt.update[i]; ok { // if it's in the update list, check that value
 					if _, ok = resp.Data[i]; ok {
 						if tt.update[i] != resp.Data[i] {
@@ -275,7 +266,6 @@ func TestRole_CreateOKSetsDefaults(t *testing.T) {
 
 	// Assert all default values were set as expected
 	assertDefault(t, resp, "write_enabled", false)
-	assertDefault(t, resp, "description", "")
 	assertDefault(t, resp, "version", 0)
 	assertDefault(t, resp, "allowed_ips", []string{})
 	assertDefault(t, resp, "ttl", float64(0))

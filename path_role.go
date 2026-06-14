@@ -19,7 +19,6 @@ const (
 type netboxRole struct {
 	Username     string        `json:"username"`
 	WriteEnabled bool          `json:"write_enabled"`
-	Description  string        `json:"description"`
 	AllowedIPs   []string      `json:"allowed_ips"`
 	Version      int           `json:"version"`
 	TTL          time.Duration `json:"ttl"`
@@ -63,13 +62,6 @@ func pathRole(b *netboxBackend) []*framework.Path {
 					Default:     false,
 					DisplayAttrs: &framework.DisplayAttributes{
 						Name: "Write Enabled",
-					},
-				},
-				"description": {
-					Type:        framework.TypeString,
-					Description: "Description set on minted token.",
-					DisplayAttrs: &framework.DisplayAttributes{
-						Name: "Description",
 					},
 				},
 				"allowed_ips": {
@@ -178,7 +170,6 @@ func (b *netboxBackend) pathRoleRead(ctx context.Context, req *logical.Request, 
 		Data: map[string]interface{}{
 			"username":      role.Username,
 			"write_enabled": role.WriteEnabled,
-			"description":   role.Description,
 			"allowed_ips":   role.AllowedIPs,
 			"version":       role.Version,
 			"ttl":           role.TTL.Seconds(),
@@ -226,13 +217,6 @@ func (b *netboxBackend) pathRoleWrite(ctx context.Context, req *logical.Request,
 		role.WriteEnabled = writeEnabled.(bool)
 	} else if createMode {
 		role.WriteEnabled = data.GetDefaultOrZero("write_enabled").(bool)
-	}
-
-	// Field: Description (not required, set default)
-	if description, ok := data.GetOk("description"); ok {
-		role.Description = description.(string)
-	} else if createMode {
-		role.Description = data.GetDefaultOrZero("description").(string)
 	}
 
 	// Field: AllowedIPs (not required, set default)
