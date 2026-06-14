@@ -10,10 +10,13 @@ import (
 )
 
 // Asserts that we received a fatal error
-func assertFatal(t *testing.T, resp *logical.Response, err error) {
+func assertFatal(t *testing.T, resp *logical.Response, err error, mustContain string) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("want fatal err, got nil (resp=%v)", resp)
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(mustContain)) {
+		t.Fatalf("error %q did not mention %q", err, mustContain)
 	}
 }
 
@@ -46,7 +49,7 @@ func assertError(t *testing.T, resp *logical.Response, err error, mustContain st
 }
 
 // Asserts that len(resp.Warnings) == 1 and that the warning message contains a given string
-func assertSingleWarning(t *testing.T, resp *logical.Response, err error, mustContain string) {
+func assertWarning(t *testing.T, resp *logical.Response, err error, mustContain string) {
 	t.Helper()
 
 	assertOK(t, resp, err)
@@ -97,5 +100,9 @@ func assertExpireTime(t *testing.T, body map[string]any, ttl time.Duration) {
 		t.Fatalf("expire time not set")
 	}
 
+	t.Error("not implemented")
+}
+
+func assertDescription(t *testing.T, body map[string]any) {
 	t.Error("not implemented")
 }

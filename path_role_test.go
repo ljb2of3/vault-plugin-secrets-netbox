@@ -398,7 +398,7 @@ func TestRole_CreateWarnForUnknownUser(t *testing.T) {
 	resp, err := roleCreateDefault(t, backend, storage)
 
 	// Assert we got a warning for the invalid user
-	assertSingleWarning(t, resp, err, `"test" not a valid`)
+	assertWarning(t, resp, err, "not a valid")
 
 	// Assert role was actually written
 	role, err := getRole(t.Context(), storage, "test")
@@ -427,7 +427,7 @@ func TestRole_CreateWarnWhenNetboxUnreachable(t *testing.T) {
 	resp, err := roleCreateDefault(t, backend, storage)
 
 	// Assert we got a warning about netbox being unreachable
-	assertSingleWarning(t, resp, err, `netbox was unreachable`)
+	assertWarning(t, resp, err, "netbox was unreachable")
 
 	// Validate role was actually written
 	role, err := getRole(t.Context(), storage, "test")
@@ -452,7 +452,7 @@ func TestRole_CreateWarnWhenNotConfigured(t *testing.T) {
 	resp, err := roleCreateDefault(t, backend, storage)
 
 	// Expect warning `Netbox backend not configured. Be sure to write to /config before minting tokens.`
-	assertSingleWarning(t, resp, err, `not configured`)
+	assertWarning(t, resp, err, "not configured")
 
 	// Validate role was actually written
 	role, err := getRole(t.Context(), storage, "test")
@@ -627,5 +627,5 @@ func TestRole_UpdateFatalWhenRoleMissing(t *testing.T) {
 	resp, err := roleUpdate(t, backend, storage, "test", map[string]any{})
 
 	// Assert that this is fatal
-	assertFatal(t, resp, err)
+	assertFatal(t, resp, err, "not found during update")
 }

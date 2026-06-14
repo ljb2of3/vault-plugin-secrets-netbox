@@ -338,5 +338,5 @@ func TestConfig_UpdateFatalWhenNotConfigured(t *testing.T) {
 	resp, err := configUpdate(t, backend, storage, map[string]any{})
 
 	// Assert that this is fatal
-	assertFatal(t, resp, err)
+	assertFatal(t, resp, err, "not found during update")
 }

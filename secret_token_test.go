@@ -48,7 +48,7 @@ func TestSecretToken_RevokeFatalWhenNetboxDown(t *testing.T) {
 	resp, err := tokenRevoke(t, backend, storage, 42)
 
 	// Assert that this actually failed
-	assertFatal(t, resp, err)
+	assertFatal(t, resp, err, "request failure")
 }
 
 func TestSecretToken_RevokeFatalWhenNetboxErrors(t *testing.T) {
@@ -68,7 +68,7 @@ func TestSecretToken_RevokeFatalWhenNetboxErrors(t *testing.T) {
 
 	// Delete a token
 	resp, err := tokenRevoke(t, backend, storage, 42)
-	assertFatal(t, resp, err)
+	assertFatal(t, resp, err, "unexpected status")
 
 	// Assert our spy got hit and we got the correct ID and method
 	assertEqual(t, 1, hits)
