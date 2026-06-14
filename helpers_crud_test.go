@@ -112,3 +112,28 @@ func roleCreateDefault(t *testing.T, b *netboxBackend, s logical.Storage) (*logi
 	t.Helper()
 	return roleCreate(t, b, s, "test", map[string]any{"username": "test"})
 }
+
+// Read a token
+func tokenRead(t *testing.T, b *netboxBackend, s logical.Storage, name string) (*logical.Response, error) {
+	t.Helper()
+	return b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      fmt.Sprintf("creds/%s", name),
+		Storage:   s,
+	})
+}
+
+// Revoke a token
+func tokenRevoke(t *testing.T, b *netboxBackend, s logical.Storage, id int) (*logical.Response, error) {
+	t.Helper()
+	return b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.RevokeOperation,
+		Storage:   s,
+		Secret: &logical.Secret{
+			InternalData: map[string]any{
+				"secret_type": netboxTokenType,
+				"token_id":    float64(id), // vault will internally pass a float64, so we type cast
+			},
+		},
+	})
+}

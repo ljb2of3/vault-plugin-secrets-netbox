@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/vault/sdk/logical"
 )
@@ -80,4 +81,21 @@ func assertListKeys(t *testing.T, resp *logical.Response, want []string) {
 	if keys := data.([]string); !reflect.DeepEqual(keys, want) {
 		t.Fatalf("want %v, got %v", want, keys)
 	}
+}
+
+func assertEqual(t *testing.T, want any, got any) {
+	t.Helper()
+	if !reflect.DeepEqual(want, got) {
+		t.Fatalf("want %v, got %v", want, got)
+	}
+}
+
+func assertExpireTime(t *testing.T, body map[string]any, ttl time.Duration) {
+	if _, ok := body["expires"]; ok {
+
+	} else {
+		t.Fatalf("expire time not set")
+	}
+
+	t.Error("not implemented")
 }
