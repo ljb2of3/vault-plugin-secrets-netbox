@@ -1,6 +1,8 @@
 package secretengine
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -17,6 +19,16 @@ func assertFatal(t *testing.T, resp *logical.Response, err error, mustContain st
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(mustContain)) {
 		t.Fatalf("error %q did not mention %q", err, mustContain)
+	}
+}
+
+func assertFatalErr(t *testing.T, resp *logical.Response, err error, want error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("want fatal err, got nil (resp=%v)", resp)
+	}
+	if !errors.Is(err, want) {
+		t.Fatalf("want %q, got %q", want, err)
 	}
 }
 
@@ -94,15 +106,35 @@ func assertEqual(t *testing.T, want any, got any) {
 }
 
 func assertExpireTime(t *testing.T, body map[string]any, ttl time.Duration) {
-	if _, ok := body["expires"]; ok {
-
-	} else {
+	t.Helper()
+	expires, ok := body["expires"]
+	if !ok {
 		t.Fatalf("expire time not set")
 	}
 
-	t.Error("not implemented")
+	got, err := time.Parse(time.RFC3339, expires.(string))
+	if err != nil {
+		t.Fatalf("cannot parse expire time: %v", err)
+	}
+
+	want := time.Now().Add(ttl).Add(netboxGracePeriod)
+	diff := want.Sub(got).Abs()
+
+	if diff > 2*time.Second {
+		t.Fatalf("time delta %v > 2s, want=%v, got=%v", diff, want, got)
+	}
 }
 
-func assertDescription(t *testing.T, body map[string]any) {
-	t.Error("not implemented")
+func assertDescription(t *testing.T, role string, body map[string]any) {
+	t.Helper()
+	got, ok := body["description"].(string)
+	if !ok {
+		t.Fatalf("description not set")
+	}
+
+	want := fmt.Sprintf("vault: role=%v req=", role)
+
+	if !strings.HasPrefix(got, want) {
+		t.Fatalf("want= %v, got=%v", want, got)
+	}
 }
