@@ -78,6 +78,9 @@ func backend() *netboxBackend {
 
 		// Invalidate is called when a key is modified, if required.
 		Invalidate: b.invalidate,
+
+		// RunningVersion reports the version string to the vault core
+		RunningVersion: Version,
 	}
 
 	return &b
