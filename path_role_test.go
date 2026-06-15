@@ -24,10 +24,6 @@ func TestRole_CreateOKSetsFields(t *testing.T) {
 			create: map[string]any{"username": "test", "write_enabled": true},
 		},
 		{
-			name:   "description",
-			create: map[string]any{"username": "test", "description": "a test role"},
-		},
-		{
 			name:       "allowed_ips",
 			create:     map[string]any{"username": "test", "allowed_ips": "1.1.1.1/32"},
 			expectNorm: map[string]any{"allowed_ips": []string{"1.1.1.1/32"}},
@@ -76,7 +72,7 @@ func TestRole_CreateOKSetsFields(t *testing.T) {
 			}
 
 			// Loop over optional scalar fields
-			for _, i := range []string{"write_enabled", "description", "version"} {
+			for _, i := range []string{"write_enabled", "version"} {
 				if _, ok := tt.create[i]; ok {
 					if _, ok = resp.Data[i]; ok {
 						if tt.create[i] != resp.Data[i] {
@@ -140,11 +136,6 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 			update: map[string]any{"write_enabled": false},
 		},
 		{
-			name:   "description",
-			create: map[string]any{"username": "test", "description": "a test role"},
-			update: map[string]any{"description": "updated test role"},
-		},
-		{
 			name:       "allowed_ips",
 			create:     map[string]any{"username": "test", "allowed_ips": "1.1.1.1/32", "ttl": "1h"},
 			update:     map[string]any{"allowed_ips": "2.2.2.2/32"},
@@ -158,8 +149,8 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 		},
 		{
 			name:   "version",
-			create: map[string]any{"username": "test", "version": 1},
-			update: map[string]any{"version": 2},
+			create: map[string]any{"username": "test"},
+			update: map[string]any{"version": 1},
 		},
 		{
 			name:       "ttl",
@@ -197,7 +188,7 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 			// Now the REAL tests...
 
 			// Loop over all scalar fields
-			for _, i := range []string{"username", "write_enabled", "description", "version"} {
+			for _, i := range []string{"username", "write_enabled", "version"} {
 				if _, ok := tt.update[i]; ok { // if it's in the update list, check that value
 					if _, ok = resp.Data[i]; ok {
 						if tt.update[i] != resp.Data[i] {
@@ -275,7 +266,6 @@ func TestRole_CreateOKSetsDefaults(t *testing.T) {
 
 	// Assert all default values were set as expected
 	assertDefault(t, resp, "write_enabled", false)
-	assertDefault(t, resp, "description", "")
 	assertDefault(t, resp, "version", 0)
 	assertDefault(t, resp, "allowed_ips", []string{})
 	assertDefault(t, resp, "ttl", float64(0))
@@ -408,7 +398,7 @@ func TestRole_CreateWarnForUnknownUser(t *testing.T) {
 	resp, err := roleCreateDefault(t, backend, storage)
 
 	// Assert we got a warning for the invalid user
-	assertSingleWarning(t, resp, err, `"test" not a valid`)
+	assertWarning(t, resp, err, "not a valid")
 
 	// Assert role was actually written
 	role, err := getRole(t.Context(), storage, "test")
@@ -437,7 +427,7 @@ func TestRole_CreateWarnWhenNetboxUnreachable(t *testing.T) {
 	resp, err := roleCreateDefault(t, backend, storage)
 
 	// Assert we got a warning about netbox being unreachable
-	assertSingleWarning(t, resp, err, `netbox was unreachable`)
+	assertWarning(t, resp, err, "netbox was unreachable")
 
 	// Validate role was actually written
 	role, err := getRole(t.Context(), storage, "test")
@@ -462,7 +452,7 @@ func TestRole_CreateWarnWhenNotConfigured(t *testing.T) {
 	resp, err := roleCreateDefault(t, backend, storage)
 
 	// Expect warning `Netbox backend not configured. Be sure to write to /config before minting tokens.`
-	assertSingleWarning(t, resp, err, `not configured`)
+	assertWarning(t, resp, err, "not configured")
 
 	// Validate role was actually written
 	role, err := getRole(t.Context(), storage, "test")
@@ -627,4 +617,33 @@ func TestFuncValidateAllowedIP_InvalidIPsReturnError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRole_UpdateFatalWhenRoleMissing(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
+
+	// Update the config without creating it
+	resp, err := roleUpdate(t, backend, storage, "test", map[string]any{})
+
+	// Assert that this is fatal
+	assertFatal(t, resp, err, "not found during update")
+}
+
+func TestRole_CreateWarnForVersion0(t *testing.T) {
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write the role
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 0})
+	assertWarning(t, resp, err, "defaulting to v1")
+}
+
+func TestRole_CreateErrorForVersion2(t *testing.T) {
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write the role
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 2})
+	assertError(t, resp, err, "v2 tokens are not yet supported")
 }

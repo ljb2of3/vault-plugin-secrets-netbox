@@ -6,7 +6,7 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func TestConfig_CreateSetsFields(t *testing.T) {
+func TestConfig_CreateOKSetsFields(t *testing.T) {
 	tests := []struct {
 		name   string
 		create map[string]any
@@ -27,25 +27,11 @@ func TestConfig_CreateSetsFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b, storage := testBackend(t)
+			backend, storage := testBackend(t)
 
-			// Write test data. Successful CREATEs apparently return nil,nil
-			resp, err := b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.CreateOperation,
-				Path:      "config",
-				Data:      tt.create,
-				Storage:   storage,
-			})
-
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("CREATE /config returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("CREATE /config returned 4xx error, %v", resp.Error())
-			}
+			// Write test data
+			resp, err := configCreate(t, backend, storage, tt.create)
+			assertOK(t, resp, err)
 
 			// Did our token actually get set?
 			cfg, err := getConfig(t.Context(), storage)
@@ -57,21 +43,8 @@ func TestConfig_CreateSetsFields(t *testing.T) {
 			}
 
 			// Read it back
-			resp, err = b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.ReadOperation,
-				Path:      "config",
-				Storage:   storage,
-			})
-
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("READ /config returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("READ /config returned 4xx error, %v", resp.Error())
-			}
+			resp, err = configRead(t, backend, storage)
+			assertOK(t, resp, err)
 
 			// Now the REAL tests...
 
@@ -103,7 +76,7 @@ func TestConfig_CreateSetsFields(t *testing.T) {
 
 }
 
-func TestConfig_UpdateSetsFields(t *testing.T) {
+func TestConfig_UpdateOKSetsFields(t *testing.T) {
 	tests := []struct {
 		name   string
 		create map[string]any
@@ -125,6 +98,11 @@ func TestConfig_UpdateSetsFields(t *testing.T) {
 			update: map[string]any{"insecure": true},
 		},
 		{
+			name:   "insecure true then false",
+			create: map[string]any{"url": "https://nb.example.com", "token": "secret", "insecure": true},
+			update: map[string]any{"insecure": false},
+		},
+		{
 			name:   "ca_cert",
 			create: map[string]any{"url": "https://nb.example.com", "token": "secret"},
 			update: map[string]any{"ca_cert": "different-cert"},
@@ -133,43 +111,16 @@ func TestConfig_UpdateSetsFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b, storage := testBackend(t)
+			// Create mock backend
+			backend, storage := testBackend(t)
 
-			// Write test data. Successful CREATEs apparently return nil,nil
-			resp, err := b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.CreateOperation,
-				Path:      "config",
-				Data:      tt.create,
-				Storage:   storage,
-			})
-
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("CREATE /config returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("CREATE /config returned 4xx error, %v", resp.Error())
-			}
+			// Write test data
+			resp, err := configCreate(t, backend, storage, tt.create)
+			assertOK(t, resp, err)
 
 			// Do an update
-			resp, err = b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.UpdateOperation,
-				Path:      "config",
-				Data:      tt.update,
-				Storage:   storage,
-			})
-
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("UPDATE /config returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("UPDATE /config returned 4xx error, %v", resp.Error())
-			}
+			resp, err = configUpdate(t, backend, storage, tt.update)
+			assertOK(t, resp, err)
 
 			// Did our token actually get updated?
 			cfg, err := getConfig(t.Context(), storage)
@@ -187,21 +138,8 @@ func TestConfig_UpdateSetsFields(t *testing.T) {
 			}
 
 			// Read it back
-			resp, err = b.HandleRequest(t.Context(), &logical.Request{
-				Operation: logical.ReadOperation,
-				Path:      "config",
-				Storage:   storage,
-			})
-
-			// 5xx error, vault broke
-			if err != nil {
-				t.Fatalf("READ /config returned err %v", err)
-			}
-
-			// 4xx error, bad user input
-			if resp.IsError() {
-				t.Fatalf("READ /config returned 4xx error, %v", resp.Error())
-			}
+			resp, err = configRead(t, backend, storage)
+			assertOK(t, resp, err)
 
 			// Now the REAL tests...
 
@@ -231,157 +169,78 @@ func TestConfig_UpdateSetsFields(t *testing.T) {
 }
 
 // Ensures we error if a URL isn't set
-func TestConfig_CreateFailsForMissingURL(t *testing.T) {
-	b, storage := testBackend(t)
+func TestConfig_CreateErrorForMissingURL(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
 
-	// Create with missing URL
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "config",
-		Data:      map[string]any{"token": "secret"},
-		Storage:   storage,
-	})
+	// Write with missing URL
+	resp, err := configCreate(t, backend, storage, map[string]any{"token": "secret"})
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("CREATE /config returned err: %v", err)
-	}
-
-	// We expect a response error
-	if !resp.IsError() {
-		t.Fatalf(`CREATE /config suceeded without "url"`)
-	}
+	// Assert error message mentions url
+	assertError(t, resp, err, "url")
 }
 
 // Ensures we error if a token isn't set
-func TestConfig_CreateFailsForMissingToken(t *testing.T) {
-	b, storage := testBackend(t)
+func TestConfig_CreateErrorForMissingToken(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
 
-	// Create with missing URL
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "config",
-		Data:      map[string]any{"url": "https://nb.example.com"},
-		Storage:   storage,
-	})
+	// Write with missing token
+	resp, err := configCreate(t, backend, storage, map[string]any{"url": "https://nb.example.com"})
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("CREATE /config returned err: %v", err)
-	}
-
-	// We expect a response error
-	if !resp.IsError() {
-		t.Fatalf(`CREATE /config suceeded without "token"`)
-	}
+	// Assert error message mentions token
+	assertError(t, resp, err, "token")
 }
 
-func TestConfig_CreateSetsDefaults(t *testing.T) {
-	b, storage := testBackend(t)
+func TestConfig_CreateOKSetsDefaults(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
 
-	// Create with missing URL
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "config",
-		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret"},
-		Storage:   storage,
-	})
-
+	// Write config
+	resp, err := configCreateDefault(t, backend, storage)
 	assertOK(t, resp, err)
 
-	resp, err = b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.ReadOperation,
-		Path:      "config",
-		Storage:   storage,
-	})
-
+	// Read it back
+	resp, err = configRead(t, backend, storage)
 	assertOK(t, resp, err)
 
+	// Assert defaults were set
 	assertDefault(t, resp, "insecure", false)
 	assertDefault(t, resp, "ca_cert", "")
 }
 
 func TestConfig_ReadAfterDeleteReturnsNil(t *testing.T) {
-	b, storage := testBackend(t)
+	// Create mock backend
+	backend, storage := testBackend(t)
 
-	// Create with missing URL
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "config",
-		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret"},
-		Storage:   storage,
-	})
+	// Write config
+	resp, err := configCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("CREATE /config returned err: %v", err)
-	}
+	// Delete config
+	resp, err = configDelete(t, backend, storage)
+	assertOK(t, resp, err)
 
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
-	}
+	// Read config
+	resp, err = configRead(t, backend, storage)
+	assertOK(t, resp, err)
 
-	resp, err = b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.DeleteOperation,
-		Path:      "config",
-		Storage:   storage,
-	})
-
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("DELETE /config returned err: %v", err)
-	}
-
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`DELETE /config failed with %v"`, resp.Error())
-	}
-
-	resp, err = b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.ReadOperation,
-		Path:      "config",
-		Storage:   storage,
-	})
-
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("READ /config returned err: %v", err)
-	}
-
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`READ /config failed with %v"`, resp.Error())
-	}
-
+	// Assert we got got nil
 	if resp != nil {
 		t.Fatalf(`READ /config after DELETE returned data`)
 	}
 }
 
 func TestConfig_DeleteResetsClient(t *testing.T) {
-	b, storage := testBackend(t)
+	// Create mock backend
+	backend, storage := testBackend(t)
 
-	// Create with missing URL
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "config",
-		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret"},
-		Storage:   storage,
-	})
-
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("CREATE /config returned err: %v", err)
-	}
-
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
-	}
+	// Write config
+	resp, err := configCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
 
 	// Warm the cache
-	client, err := b.getClient(t.Context(), storage)
+	client, err := backend.getClient(t.Context(), storage)
 	if err != nil {
 		t.Fatalf("getClient() returned an error: %v", err)
 	}
@@ -390,25 +249,12 @@ func TestConfig_DeleteResetsClient(t *testing.T) {
 		t.Fatalf("getClient() did not return a client")
 	}
 
-	// Delete
-	resp, err = b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.DeleteOperation,
-		Path:      "config",
-		Storage:   storage,
-	})
-
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("DELETE /config returned err: %v", err)
-	}
-
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`DELETE /config failed with %v"`, resp.Error())
-	}
+	// Delete config
+	resp, err = configDelete(t, backend, storage)
+	assertOK(t, resp, err)
 
 	// Verify the client was reset
-	client, err = b.getClient(t.Context(), storage)
+	client, err = backend.getClient(t.Context(), storage)
 	if err == nil {
 		t.Fatalf("getClient() did not return an error")
 	}
@@ -419,53 +265,42 @@ func TestConfig_DeleteResetsClient(t *testing.T) {
 }
 
 func TestConfig_DeleteIsIdempotent(t *testing.T) {
-	b, storage := testBackend(t)
+	// Create the mock backend
+	backend, storage := testBackend(t)
 
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.DeleteOperation,
-		Path:      "config",
-		Storage:   storage,
-	})
+	// Write config
+	resp, err := configCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("DELETE /config returned err: %v", err)
-	}
+	// Delete config
+	resp, err = configDelete(t, backend, storage)
+	assertOK(t, resp, err)
 
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`DELETE /config failed with %v"`, resp.Error())
-	}
+	// Delete config again
+	resp, err = configDelete(t, backend, storage)
+	assertOK(t, resp, err)
 }
 
 func TestConfig_ReadReturnsNilWhenNotConfigured(t *testing.T) {
-	b, storage := testBackend(t)
+	// Create mock backend
+	backend, storage := testBackend(t)
 
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.ReadOperation,
-		Path:      "config",
-		Storage:   storage,
-	})
+	// Read config
+	resp, err := configRead(t, backend, storage)
+	assertOK(t, resp, err)
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("READ /config returned err: %v", err)
-	}
-
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`READ /config failed with %v"`, resp.Error())
-	}
-
+	// Assert we got a nil response
 	if resp != nil {
 		t.Fatalf("READ /config returned data")
 	}
 }
 
 func TestConfig_EnsureExistenceCheckWorks(t *testing.T) {
-	b, storage := testBackend(t)
+	// Create mock backend
+	backend, storage := testBackend(t)
 
-	_, exists, err := b.HandleExistenceCheck(t.Context(), &logical.Request{
+	// Assert that the config doesn't exist
+	_, exists, err := backend.HandleExistenceCheck(t.Context(), &logical.Request{
 		Operation: logical.CreateOperation, Path: "config", Storage: storage,
 	})
 
@@ -477,24 +312,12 @@ func TestConfig_EnsureExistenceCheckWorks(t *testing.T) {
 		t.Fatalf("config exists before create")
 	}
 
-	resp, err := b.HandleRequest(t.Context(), &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "config",
-		Data:      map[string]any{"url": "https://nb.example.com", "token": "secret"},
-		Storage:   storage,
-	})
+	// Write config
+	resp, err := configCreateDefault(t, backend, storage)
+	assertOK(t, resp, err)
 
-	// 5xx error, vault broke
-	if err != nil {
-		t.Fatalf("CREATE /config returned err: %v", err)
-	}
-
-	// We don't expect a response error
-	if resp.IsError() {
-		t.Fatalf(`CREATE /config failed with %v"`, resp.Error())
-	}
-
-	_, exists, err = b.HandleExistenceCheck(t.Context(), &logical.Request{
+	// Assert that the config does exist
+	_, exists, err = backend.HandleExistenceCheck(t.Context(), &logical.Request{
 		Operation: logical.CreateOperation, Path: "config", Storage: storage,
 	})
 
@@ -505,5 +328,15 @@ func TestConfig_EnsureExistenceCheckWorks(t *testing.T) {
 	if !exists {
 		t.Fatalf("config does not exist after create")
 	}
+}
 
+func TestConfig_UpdateFatalWhenNotConfigured(t *testing.T) {
+	// Create mock backend
+	backend, storage := testBackend(t)
+
+	// Update the config without creating it
+	resp, err := configUpdate(t, backend, storage, map[string]any{})
+
+	// Assert that this is fatal
+	assertFatal(t, resp, err, "not found during update")
 }

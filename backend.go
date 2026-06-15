@@ -57,6 +57,7 @@ func backend() *netboxBackend {
 			pathRole(&b),
 			[]*framework.Path{
 				pathConfig(&b),
+				pathCreds(&b),
 			},
 		),
 		PathsSpecial: &logical.Paths{
@@ -68,7 +69,9 @@ func backend() *netboxBackend {
 		// Secrets is the list of secret types that this backend can
 		// return. It is used to automatically generate proper responses,
 		// and ease specifying callbacks for revocation, renewal, etc.
-		Secrets: []*framework.Secret{},
+		Secrets: []*framework.Secret{
+			b.netboxToken(),
+		},
 
 		// BackendType is the logical.BackendType for the backend implementation
 		BackendType: logical.TypeLogical,

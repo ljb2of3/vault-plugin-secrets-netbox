@@ -1,14 +1,38 @@
 package secretengine
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-// Asserts that we did not receive an error
+// Asserts that we received a fatal error
+func assertFatal(t *testing.T, resp *logical.Response, err error, mustContain string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("want fatal err, got nil (resp=%v)", resp)
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(mustContain)) {
+		t.Fatalf("error %q did not mention %q", err, mustContain)
+	}
+}
+
+func assertFatalErr(t *testing.T, resp *logical.Response, err error, want error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("want fatal err, got nil (resp=%v)", resp)
+	}
+	if !errors.Is(err, want) {
+		t.Fatalf("want %q, got %q", want, err)
+	}
+}
+
+// Asserts that we did not receive an fatal error
 func assertNotFatal(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
@@ -37,7 +61,7 @@ func assertError(t *testing.T, resp *logical.Response, err error, mustContain st
 }
 
 // Asserts that len(resp.Warnings) == 1 and that the warning message contains a given string
-func assertSingleWarning(t *testing.T, resp *logical.Response, err error, mustContain string) {
+func assertWarning(t *testing.T, resp *logical.Response, err error, mustContain string) {
 	t.Helper()
 
 	assertOK(t, resp, err)
@@ -71,5 +95,46 @@ func assertListKeys(t *testing.T, resp *logical.Response, want []string) {
 	}
 	if keys := data.([]string); !reflect.DeepEqual(keys, want) {
 		t.Fatalf("want %v, got %v", want, keys)
+	}
+}
+
+func assertEqual(t *testing.T, want any, got any) {
+	t.Helper()
+	if !reflect.DeepEqual(want, got) {
+		t.Fatalf("want %v, got %v", want, got)
+	}
+}
+
+func assertExpireTime(t *testing.T, body map[string]any, ttl time.Duration) {
+	t.Helper()
+	expires, ok := body["expires"]
+	if !ok {
+		t.Fatalf("expire time not set")
+	}
+
+	got, err := time.Parse(time.RFC3339, expires.(string))
+	if err != nil {
+		t.Fatalf("cannot parse expire time: %v", err)
+	}
+
+	want := time.Now().Add(ttl).Add(netboxGracePeriod)
+	diff := want.Sub(got).Abs()
+
+	if diff > 2*time.Second {
+		t.Fatalf("time delta %v > 2s, want=%v, got=%v", diff, want, got)
+	}
+}
+
+func assertDescription(t *testing.T, role string, body map[string]any) {
+	t.Helper()
+	got, ok := body["description"].(string)
+	if !ok {
+		t.Fatalf("description not set")
+	}
+
+	want := fmt.Sprintf("vault: role=%v req=", role)
+
+	if !strings.HasPrefix(got, want) {
+		t.Fatalf("want= %v, got=%v", want, got)
 	}
 }

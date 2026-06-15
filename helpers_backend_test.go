@@ -52,3 +52,18 @@ func netboxNoUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"count":0,"results":[]}`))
 }
+
+func netboxDeleteToken(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(204)
+	w.Write([]byte{})
+}
+
+func netboxResponds404(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(404)
+	w.Write([]byte{})
+}
+
+func netboxResponds500(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(500)
+	w.Write([]byte{})
+}
