@@ -149,8 +149,8 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 		},
 		{
 			name:   "version",
-			create: map[string]any{"username": "test", "version": 1},
-			update: map[string]any{"version": 2},
+			create: map[string]any{"username": "test"},
+			update: map[string]any{"version": 1},
 		},
 		{
 			name:       "ttl",
@@ -628,4 +628,22 @@ func TestRole_UpdateFatalWhenRoleMissing(t *testing.T) {
 
 	// Assert that this is fatal
 	assertFatal(t, resp, err, "not found during update")
+}
+
+func TestRole_CreateWarnForVersion0(t *testing.T) {
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write the role
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 0})
+	assertWarning(t, resp, err, "defaulting to v1")
+}
+
+func TestRole_CreateErrorForVersion2(t *testing.T) {
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+
+	// Write the role
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 2})
+	assertError(t, resp, err, "v2 tokens are not yet supported")
 }

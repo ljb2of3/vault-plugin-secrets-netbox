@@ -2,6 +2,8 @@ package secretengine
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -22,11 +24,13 @@ type netboxTokenRequest struct {
 	Description  string   `json:"description"`
 	AllowedIPs   []string `json:"allowed_ips,omitempty"`
 	Version      int      `json:"version,omitempty"`
+	Key          string   `json:"key,omitempty"`
 }
 
 type netboxTokenResponse struct {
-	ID  int    `json:"id"`
-	Key string `json:"key"`
+	ID    int    `json:"id"`
+	Key   string `json:"key"`
+	Token string `json:"token"`
 }
 
 func pathCreds(b *netboxBackend) *framework.Path {
@@ -115,6 +119,14 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 		tokenRequest.Version = role.Version
 	}
 
+	// TEMPORARY, always generate V1 token
+	token, err := generateTokenKey()
+	if err != nil {
+		return nil, err
+	}
+
+	tokenRequest.Key = token
+
 	// Sent request to netbox
 	tokenResponse := netboxTokenResponse{}
 	err = c.doRequest(ctx, "POST", "/api/users/tokens/", &tokenRequest, &tokenResponse)
@@ -122,17 +134,13 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 		return nil, err
 	}
 
-	// Sanity check the response
+	// Ensure we got an ID back
 	if tokenResponse.ID == 0 {
 		return nil, errors.New("Netbox didn't return a token ID")
 	}
 
-	if tokenResponse.Key == "" {
-		return nil, errors.New("Netbox didn't return a token")
-	}
-
 	// Build secret
-	secretData := map[string]any{"token": tokenResponse.Key}
+	secretData := map[string]any{"token": tokenRequest.Key} // Always returns v1 token we generated
 	secretInternal := map[string]any{"token_id": tokenResponse.ID}
 
 	resp := b.Secret(netboxTokenType).Response(secretData, secretInternal)
@@ -140,4 +148,12 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 	resp.Secret.MaxTTL = role.MaxTTL
 
 	return resp, nil
+}
+
+func generateTokenKey() (string, error) {
+	b := make([]byte, 20)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil // 20 bytes → 40 hex chars
 }
