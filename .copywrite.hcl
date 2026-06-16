@@ -6,5 +6,7 @@ project {
   copyright_year   = 2026
 
   # Paths copywrite should not add headers to. Globs are relative to repo root.
-  header_ignore = []
+  header_ignore = [
+    ".golangci.yml"
+  ]
 }
