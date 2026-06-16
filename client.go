@@ -145,7 +145,7 @@ func (c *netboxClient) doRequest(ctx context.Context, method string, path string
 	}
 
 	// Close the body when we exit the func
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("%w: %d %s", errUnexpectedStatus, resp.StatusCode, http.StatusText(resp.StatusCode))
