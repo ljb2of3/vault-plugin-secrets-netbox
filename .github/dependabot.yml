@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Go module dependencies (vault sdk, etc.)
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+
+  # The action versions pinned in .github/workflows/
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

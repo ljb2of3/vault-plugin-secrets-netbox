@@ -1,0 +1,15 @@
+# golangci-lint v2 config. The default linter set (errcheck, govet,
+# ineffassign, staticcheck, unused) is enabled implicitly; we add a couple
+# of low-noise extras. Expand `enable` as you want stricter checks.
+version: "2"
+
+linters:
+  enable:
+    - misspell
+  exclusions:
+    rules:
+      # Test HTTP stub handlers ignore write errors on purpose; errcheck on
+      # those is noise. Production code still gets the full check.
+      - path: _test\.go
+        linters:
+          - errcheck
