@@ -109,7 +109,7 @@ token              4bab6bcb770901c468185d2910455ba4535cbe7f
 
 These days software development with AI is the norm. That said...
 
-> [!IMPORTANT]
+> [!NOTE]
 > The plugin code in this repo was artisanally hand-crafted by @ljb2of3
 
 However, [Claude Code](https://claude.com/product/claude-code) was used in the following ways during development:
