@@ -7,6 +7,7 @@ project {
 
   # Paths copywrite should not add headers to. Globs are relative to repo root.
   header_ignore = [
-    ".golangci.yml"
+    ".golangci.yml",
+    ".goreleaser.yml"
   ]
 }
