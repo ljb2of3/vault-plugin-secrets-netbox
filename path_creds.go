@@ -139,7 +139,7 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 
 	// Ensure we got an ID back
 	if tokenResponse.ID == 0 {
-		return nil, errors.New("Netbox didn't return a token ID")
+		return nil, errors.New("netbox didn't return a token ID")
 	}
 
 	// Build secret

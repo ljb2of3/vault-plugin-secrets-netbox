@@ -55,8 +55,8 @@ func (b *netboxBackend) revokeToken(ctx context.Context, req *logical.Request, d
 	}
 
 	// Drain the body
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	// Check the return code and respond
 	switch {
