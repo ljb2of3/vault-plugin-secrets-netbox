@@ -1,0 +1,54 @@
+version: 2
+
+project_name: vault-plugin-secrets-netbox
+
+builds:
+  - main: ./cmd/vault-plugin-secrets-netbox
+    binary: vault-plugin-secrets-netbox
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    # .Tag keeps the leading "v" so released builds match the dev default
+    # (v0.0.0-dev) reported via the backend's RunningVersion.
+    ldflags:
+      - -s -w
+      - -X github.com/ljb2of3/vault-plugin-secrets-netbox.Version={{ .Tag }}
+
+# Distribute raw binaries (not tarballs) so the checksum file lists the
+# plugin binary's sha256 directly — that's what `vault plugin register
+# -sha256=` needs.
+archives:
+  - formats: [binary]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
+
+# Keyless signing of the checksum file via cosign + GitHub OIDC. Signing the
+# checksums covers every artifact and needs no managed key. Requires the
+# cosign binary and `id-token: write` in the release workflow.
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    output: true
+
+# Per-binary SBOM via syft (syft binary must be present in CI).
+sboms:
+  - artifacts: binary
+
+changelog:
+  use: github
+  sort: asc
