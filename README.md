@@ -2,6 +2,9 @@
 
 This is a plugin for [HashiCorp Vault](https://developer.hashicorp.com/vault) that generates ephemeral [NetBox](https://github.com/netbox-community/netbox) API tokens.
 
+> [!IMPORTANT]
+> This plugin currently supports netbox 4.4 and _earlier_. Fixes for 4.5 and _later_ are being tracked in issues #6, #22, and #23.
+
 ## Zero to Token in 3 commands
 
 ```console
