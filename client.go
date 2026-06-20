@@ -201,6 +201,19 @@ func (c *netboxClient) resolveUserID(ctx context.Context, username string) (int,
 	return data.Results[0].ID, nil
 }
 
+func (c *netboxClient) getTokenContract(ctx context.Context) (TokenContract, error) {
+	return UnknownContract, nil
+}
+
+type TokenContract int
+
+const (
+	UnknownContract TokenContract = iota
+	OldContract
+	NewContractNoV2
+	NewContract
+)
+
 var (
 	errNetboxNotConfigured  = errors.New("netbox backend not configured")
 	errBuildingRequest      = errors.New("bad request")
@@ -211,4 +224,5 @@ var (
 	errUserNotFound         = errors.New("user not found")
 	errUnexpectedNumResults = errors.New("unexpected number of results")
 	errWrongUser            = errors.New("query returned wrong user")
+	errUnknownContract      = errors.New("unknown token api contract")
 )
