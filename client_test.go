@@ -131,68 +131,68 @@ func TestClient_GetVersionContract(t *testing.T) {
 		name         string
 		simResponse  string
 		simStatus    int
-		wantContract TokenContract
+		wantContract tokenContract
 		wantErr      error
 		breakServer  bool
 	}{
 		{
 			name:         "old contract",
 			simResponse:  `{"netbox-version": "3.7.8"}`,
-			wantContract: OldContract,
+			wantContract: oldContract,
 			wantErr:      nil,
 		},
 		{
 			name:         "old contract boundary",
 			simResponse:  `{"netbox-version": "4.4.10"}`,
-			wantContract: OldContract,
+			wantContract: oldContract,
 			wantErr:      nil,
 		},
 		{
 			name:         "partial new contract boundary",
 			simResponse:  `{"netbox-version": "4.5.0"}`,
-			wantContract: NewContractNoV2,
+			wantContract: newContractNoV2,
 			wantErr:      nil,
 		},
 		{
 			name:         "partial new contract2",
 			simResponse:  `{"netbox-version": "4.6.0"}`,
-			wantContract: NewContractNoV2,
+			wantContract: newContractNoV2,
 			wantErr:      nil,
 		},
 		{
 			name:         "fully working new contract boundary",
 			simResponse:  `{"netbox-version": "4.6.1"}`,
-			wantContract: NewContract,
+			wantContract: newContract,
 			wantErr:      nil,
 		},
 		{
 			name:         "fully working new contract",
 			simResponse:  `{"netbox-version": "4.6.2"}`,
-			wantContract: NewContract,
+			wantContract: newContract,
 			wantErr:      nil,
 		},
 		{
 			name:         "missing version",
 			simResponse:  `{}`,
-			wantContract: UnknownContract,
+			wantContract: unknownContract,
 			wantErr:      errUnknownContract,
 		},
 		{
 			name:         "malformed version",
 			simResponse:  `{"netbox-version": "broken"}`,
-			wantContract: UnknownContract,
+			wantContract: unknownContract,
 			wantErr:      errUnknownContract,
 		},
 		{
 			name:         "malformed json",
 			simResponse:  `{"netbox-version" "4.0.0"}`,
-			wantContract: UnknownContract,
+			wantContract: unknownContract,
 			wantErr:      errInvalidResponseBody,
 		},
 		{
 			name:         "server error",
 			simStatus:    500,
-			wantContract: UnknownContract,
+			wantContract: unknownContract,
 			wantErr:      errUnexpectedStatus,
 		},
 		{

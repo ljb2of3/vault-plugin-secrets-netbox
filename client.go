@@ -202,43 +202,43 @@ func (c *netboxClient) resolveUserID(ctx context.Context, username string) (int,
 	return data.Results[0].ID, nil
 }
 
-func (c *netboxClient) getTokenContract(ctx context.Context) (TokenContract, error) {
+func (c *netboxClient) getTokenContract(ctx context.Context) (tokenContract, error) {
 	data := struct {
 		NetboxVersion string `json:"netbox-version"`
 	}{}
 
 	err := c.doRequest(ctx, "GET", "/api/status/", nil, &data)
 	if err != nil {
-		return UnknownContract, err
+		return unknownContract, err
 	}
 
 	if data.NetboxVersion == "" {
-		return UnknownContract, errUnknownContract
+		return unknownContract, errUnknownContract
 	}
 
 	version := "v" + data.NetboxVersion
 
 	if !semver.IsValid(version) {
-		return UnknownContract, errUnknownContract
+		return unknownContract, errUnknownContract
 	}
 
 	switch {
 	case semver.Compare(version, "v4.5.0") < 0:
-		return OldContract, nil
+		return oldContract, nil
 	case semver.Compare(version, "v4.6.1") < 0:
-		return NewContractNoV2, nil
+		return newContractNoV2, nil
 	default:
-		return NewContract, nil
+		return newContract, nil
 	}
 }
 
-type TokenContract int
+type tokenContract int
 
 const (
-	UnknownContract TokenContract = iota
-	OldContract
-	NewContractNoV2
-	NewContract
+	unknownContract tokenContract = iota
+	oldContract
+	newContractNoV2
+	newContract
 )
 
 var (
