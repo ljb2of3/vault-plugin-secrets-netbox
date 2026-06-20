@@ -160,3 +160,8 @@ func generateTokenKey() (string, error) {
 	}
 	return hex.EncodeToString(b), nil // 20 bytes → 40 hex chars
 }
+
+var (
+	errV2Unsupported       = errors.New("v2 token api unsupported")
+	errPepperNotConfigured = errors.New("netbox api token pepper not configured, v2 token api unavailable")
+)
