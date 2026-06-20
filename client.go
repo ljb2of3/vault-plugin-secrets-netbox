@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/vault/sdk/logical"
+	"golang.org/x/mod/semver"
 )
 
 type netboxClient struct {
@@ -202,7 +203,33 @@ func (c *netboxClient) resolveUserID(ctx context.Context, username string) (int,
 }
 
 func (c *netboxClient) getTokenContract(ctx context.Context) (TokenContract, error) {
-	return UnknownContract, nil
+	data := struct {
+		NetboxVersion string `json:"netbox-version"`
+	}{}
+
+	err := c.doRequest(ctx, "GET", "/api/status/", nil, &data)
+	if err != nil {
+		return UnknownContract, err
+	}
+
+	if data.NetboxVersion == "" {
+		return UnknownContract, errUnknownContract
+	}
+
+	version := "v" + data.NetboxVersion
+
+	if !semver.IsValid(version) {
+		return UnknownContract, errUnknownContract
+	}
+
+	switch {
+	case semver.Compare(version, "v4.5.0") < 0:
+		return OldContract, nil
+	case semver.Compare(version, "v4.6.1") < 0:
+		return NewContractNoV2, nil
+	default:
+		return NewContract, nil
+	}
 }
 
 type TokenContract int
