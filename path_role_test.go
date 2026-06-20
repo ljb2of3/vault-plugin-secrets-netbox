@@ -41,6 +41,10 @@ func TestRole_CreateOKSetsFields(t *testing.T) {
 			create: map[string]any{"username": "test", "version": 1},
 		},
 		{
+			name:   "version 2",
+			create: map[string]any{"username": "test", "version": 2},
+		},
+		{
 			name:       "ttl",
 			create:     map[string]any{"username": "test", "ttl": "1h"},
 			expectNorm: map[string]any{"ttl": 1 * time.Hour},
@@ -152,8 +156,8 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 		},
 		{
 			name:   "version",
-			create: map[string]any{"username": "test"},
-			update: map[string]any{"version": 1},
+			create: map[string]any{"username": "test"}, // defaults to v1
+			update: map[string]any{"version": 2},
 		},
 		{
 			name:       "ttl",
@@ -269,7 +273,7 @@ func TestRole_CreateOKSetsDefaults(t *testing.T) {
 
 	// Assert all default values were set as expected
 	assertDefault(t, resp, "write_enabled", false)
-	assertDefault(t, resp, "version", 0)
+	assertDefault(t, resp, "version", 1)
 	assertDefault(t, resp, "allowed_ips", []string{})
 	assertDefault(t, resp, "ttl", float64(0))
 	assertDefault(t, resp, "max_ttl", float64(0))
@@ -633,20 +637,11 @@ func TestRole_UpdateFatalWhenRoleMissing(t *testing.T) {
 	assertFatal(t, resp, err, "not found during update")
 }
 
-func TestRole_CreateWarnForVersion0(t *testing.T) {
+func TestRole_CreateErrorForVersion0(t *testing.T) {
 	// Create mock backend
 	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
 
-	// Write the role
+	// Write the role with the now-invalid version 0 (auto was dropped)
 	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 0})
-	assertWarning(t, resp, err, "defaulting to v1")
-}
-
-func TestRole_CreateErrorForVersion2(t *testing.T) {
-	// Create mock backend
-	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
-
-	// Write the role
-	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 2})
-	assertError(t, resp, err, "v2 tokens are not yet supported")
+	assertError(t, resp, err, "version must")
 }

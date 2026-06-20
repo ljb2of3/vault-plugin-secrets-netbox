@@ -21,7 +21,7 @@ func TestCreds_ReadTokenOK_OldContract(t *testing.T) {
 		netboxVersion string
 	}{
 		{
-			name:          "auto version",
+			name:          "unset version",
 			roleData:      map[string]any{"username": "test"},
 			wantBody:      map[string]any{"user": float64(42), "write_enabled": false},
 			handlerReturn: map[string]any{"id": 84},
@@ -312,13 +312,13 @@ func TestCreds_NewContract_V1_SendsToken(t *testing.T) {
 	assertMissing(t, gotBody, "key")
 }
 
-func TestCreds_AutoVersion_ResolvesToV1OnNew(t *testing.T) {
-	// Request an implicit v1 token against a new contract server
+func TestCreds_UnsetVersion_V1OnNewContract(t *testing.T) {
+	// Request a token with no version set against a new contract server
 	roleData := map[string]any{"username": "test"}
 	handlerReturn := map[string]any{"id": 84}
 	resp, gotBody := mintToken(t, "4.5.0", roleData, handlerReturn)
 
-	// same assertions as TestCreds_NewContract_V1_SendsToken, but our request exercises the auto-resolution branch
+	// same assertions as TestCreds_NewContract_V1_SendsToken, but our request exercises the unset-defaults-to-v1 branch
 	assertEqual(t, float64(1), gotBody["version"])
 	assertEqual(t, gotBody["token"], resp.Data["token"])
 	assertMissing(t, gotBody, "key")
@@ -346,6 +346,34 @@ func TestCreds_V2_FatalBelow461(t *testing.T) {
 		case r.URL.Path == "/api/status/":
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"netbox-version": "4.6.0"}`))
+		case r.URL.Path == "/api/users/users/" && r.Method == "GET":
+			netboxUserFound(w, r)
+		case r.URL.Path == "/api/users/tokens/" && r.Method == "POST":
+			t.Errorf("must not POST a token when v2 is unsupported by the server")
+		default:
+			t.Errorf("Unexpected HTTP call %s %s", r.Method, r.URL.Path)
+		}
+	}
+	backend, storage, _ := testBackendWithNetbox(t, handler)
+
+	// Create a role that explicitly wants a v2 token
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 2})
+	assertOK(t, resp, err)
+
+	// Read a token
+	resp, err = tokenRead(t, backend, storage, "test")
+
+	// Assert that the read failed due to v2 not being supported
+	assertFatalErr(t, resp, err, errV2Unsupported)
+}
+
+func TestCreds_V2_FatalOnOldContract(t *testing.T) {
+	// Set up a 4.4.0 mock server that predates the new token contract
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/status/":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"netbox-version": "4.4.0"}`))
 		case r.URL.Path == "/api/users/users/" && r.Method == "GET":
 			netboxUserFound(w, r)
 		case r.URL.Path == "/api/users/tokens/" && r.Method == "POST":
