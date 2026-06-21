@@ -188,6 +188,9 @@ func TestCreds_ReadFatalWhenNetboxErrors(t *testing.T) {
 			netboxResponds500(w, r)
 		case r.URL.Path == "/api/users/users/" && r.Method == "GET":
 			netboxUserFound(w, r)
+		case r.URL.Path == "/api/status/":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"netbox-version": "4.4.0"}`))
 		}
 	}
 
