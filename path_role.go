@@ -75,13 +75,12 @@ func pathRole(b *netboxBackend) []*framework.Path {
 					},
 				},
 				"version": {
-					Type: framework.TypeInt,
-					//Description: "Version of token to mint. Allowed values are 1, 2, or 0, which defaults to the best supported by your version of netbox. Version 2 requires Netbox 4.6.1+",
-					Description: "Version of token to mint. Allowed values are 0 or 1. Currently 0 will just default to 1 until support for v2 tokens is added.",
+					Type:        framework.TypeInt,
+					Description: "Version of token to mint. Allowed values are 1 or 2",
 					DisplayAttrs: &framework.DisplayAttributes{
 						Name: "Version",
 					},
-					AllowedValues: []any{0, 1},
+					AllowedValues: []any{1, 2},
 				},
 				"ttl": {
 					Type:        framework.TypeDurationSecond,
@@ -149,6 +148,11 @@ func getRole(ctx context.Context, s logical.Storage, name string) (*netboxRole, 
 	err = entry.DecodeJSON(&role)
 	if err != nil {
 		return nil, fmt.Errorf("error reading role %q: %w", name, err)
+	}
+
+	// Migrate legacy version 0 to default version 1
+	if role.Version == 0 {
+		role.Version = 1
 	}
 
 	// Return the role
@@ -240,18 +244,15 @@ func (b *netboxBackend) pathRoleWrite(ctx context.Context, req *logical.Request,
 	// Field: Version (not required, set default)
 	if version, ok := data.GetOk("version"); ok {
 		switch version.(int) {
-		case 0:
-			role.Version = 0
-			resp.AddWarning("token version unset; defaulting to v1 (v2 not yet supported)")
 		case 1:
 			role.Version = 1
 		case 2:
-			return logical.ErrorResponse("v2 tokens are not yet supported; use version 1 or leave unset"), nil
+			role.Version = 2
 		default:
-			return logical.ErrorResponse("version must be 0 (auto/v1) or 1"), nil
+			return logical.ErrorResponse("version must be 1 or 2"), nil
 		}
 	} else if createMode {
-		role.Version = 0 // unset → v1, no warning (see below)
+		role.Version = 1
 	}
 
 	// Field: TTL (not required, set default)

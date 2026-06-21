@@ -149,7 +149,8 @@ func (c *netboxClient) doRequest(ctx context.Context, method string, path string
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("%w: %d %s", errUnexpectedStatus, resp.StatusCode, http.StatusText(resp.StatusCode))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512)) // truncate — Django debug 500s can be huge
+		return fmt.Errorf("%w: %d %s: %s", errUnexpectedStatus, resp.StatusCode, http.StatusText(resp.StatusCode), body)
 	}
 
 	if output != nil {
