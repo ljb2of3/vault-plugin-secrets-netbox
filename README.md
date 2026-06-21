@@ -2,10 +2,7 @@
 
 This is a plugin for [HashiCorp Vault](https://developer.hashicorp.com/vault) that generates ephemeral [NetBox](https://github.com/netbox-community/netbox) API tokens.
 
-> [!IMPORTANT]
-> This plugin currently supports netbox 4.4 and _earlier_. Fixes for 4.5 and _later_ are being tracked in issues #6, #22, and #23.
-
-## Zero to Token in 3 commands
+## Zero to token in 3 commands
 
 ```console
 $ vault write netbox/config url=https://demo.netbox.dev token=dtagjHV3fZaISOqljy045aIccysURLwLBciVTTve
@@ -32,7 +29,7 @@ This is a Vault plugin and is meant to work with Vault. This guide assumes you h
 2. Copy the binary into the `plugin_directory` on each of your Vault servers.
 3. Use [`vault plugin register`](https://developer.hashicorp.com/vault/docs/commands/plugin/register) to add your plugin to the catalog. For example:
 ```bash
-VERSION=0.4.0    # the release you downloaded
+VERSION=0.5.0    # the release you downloaded
 SHA256=...       # this binary's entry in the verified SHA256SUMS file
 
 vault plugin register \
@@ -51,7 +48,7 @@ alicloud                             auth        v0.23.1+builtin
 approle                              auth        v2.0.2+builtin.vault
 ...                                  ...         ...
 transit                              secret      v2.0.2+builtin.vault
-vault-plugin-secrets-netbox          secret      v0.4.0
+vault-plugin-secrets-netbox          secret      v0.5.0
 ```
 5. Enable the plugin
 ```bash
@@ -99,7 +96,7 @@ At a minimum, you must supply a username. For example:
 vault write netbox/role/test username=alice
 ```
 
-Additional options are available to tune the ttl on generated tokens, set IPs allowed to use the tokens, or enable write access. Note that this plugin defaults to generating read-only tokens. See `vault path-help netbox/role/name` for more information.
+Additional options are available to set the token version (see below), tune the ttl on generated tokens, set IPs allowed to use the tokens, or enable write access. Note that this plugin defaults to generating read-only tokens. See `vault path-help netbox/role/name` for more information.
 
 To create a role to generate write enabled tokens:
 
@@ -121,6 +118,26 @@ lease_renewable    false
 token              4bab6bcb770901c468185d2910455ba4535cbe7f
 ```
 
+### Token Versions
+
+Roles mint v1 tokens by default. Set `version` on the role to choose:
+
+- **v1** (default): legacy tokens, used as `Authorization: Token <token>`. Works on all supported NetBox. Deprecated upstream, to be removed in NetBox 5.0.
+- **v2** (`version=2`): modern tokens, prefixed `nbt_`, used as `Authorization: Bearer <token>`. Requires NetBox 4.6.1+ with `API_TOKEN_PEPPERS` set on the server.
+
+The auth scheme differs by version, so it's a deliberate per-role choice — there's no auto-upgrade. Requesting `version=2` on a server that can't support it fails rather than silently downgrading.
+
+```console
+$ vault write netbox/role/modern username=alice version=2
+$ vault read netbox/creds/modern
+Key                Value
+---                -----
+lease_id           netbox/creds/modern/1bc8XgXv69wNMhLkcGhyR7tM
+lease_duration     768h
+lease_renewable    false
+token              nbt_hE4GLtKVlQvb.IRtCh3qouLTXRTaIbl8sL6bA4b1glKaljZh7tP2
+```
+
 ## Verifying Releases
 
 Release binaries are signed with [cosign](https://github.com/sigstore/cosign) using keyless
@@ -132,7 +149,7 @@ from the [releases page](https://github.com/ljb2of3/vault-plugin-secrets-netbox/
 then verify the signature on the checksums:
 
 ```bash
-VERSION=0.4.0    # the release you downloaded
+VERSION=0.5.0    # the release you downloaded
 
 cosign verify-blob \
     --certificate "vault-plugin-secrets-netbox_${VERSION}_SHA256SUMS.pem" \
@@ -166,13 +183,13 @@ time via [GoReleaser](https://goreleaser.com) (see `.goreleaser.yml`).
 These days software development with AI is the norm. That said...
 
 > [!NOTE]
-> The plugin code in this repo was artisanally hand-crafted by @ljb2of3
+> The plugin code in this repo was artisanally hand-crafted by a human.
 
 However, [Claude Code](https://claude.com/product/claude-code) was used in the following ways during development:
 - To perform code reviews, and as a research assistant
-- To design (not implement) test cases so no edge cases were forgotten
+- To design, and occasionally implement, test cases so no edge cases were forgotten
 - Occasionally generated small code snippets (<10 lines)
-    - These were reviewed and placed into the codebase by hand
+    - These were reviewed and placed into the plugin codebase by hand
 - Directly generated CI configurations which were reviewed by me prior to commit
 
 ## Additional Information
