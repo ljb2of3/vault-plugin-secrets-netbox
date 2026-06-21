@@ -41,6 +41,10 @@ func TestRole_CreateOKSetsFields(t *testing.T) {
 			create: map[string]any{"username": "test", "version": 1},
 		},
 		{
+			name:   "version 2",
+			create: map[string]any{"username": "test", "version": 2},
+		},
+		{
 			name:       "ttl",
 			create:     map[string]any{"username": "test", "ttl": "1h"},
 			expectNorm: map[string]any{"ttl": 1 * time.Hour},
@@ -152,8 +156,8 @@ func TestRole_UpdateOKSetsFields(t *testing.T) {
 		},
 		{
 			name:   "version",
-			create: map[string]any{"username": "test"},
-			update: map[string]any{"version": 1},
+			create: map[string]any{"username": "test"}, // defaults to v1
+			update: map[string]any{"version": 2},
 		},
 		{
 			name:       "ttl",
@@ -269,7 +273,7 @@ func TestRole_CreateOKSetsDefaults(t *testing.T) {
 
 	// Assert all default values were set as expected
 	assertDefault(t, resp, "write_enabled", false)
-	assertDefault(t, resp, "version", 0)
+	assertDefault(t, resp, "version", 1)
 	assertDefault(t, resp, "allowed_ips", []string{})
 	assertDefault(t, resp, "ttl", float64(0))
 	assertDefault(t, resp, "max_ttl", float64(0))
@@ -633,20 +637,34 @@ func TestRole_UpdateFatalWhenRoleMissing(t *testing.T) {
 	assertFatal(t, resp, err, "not found during update")
 }
 
-func TestRole_CreateWarnForVersion0(t *testing.T) {
+func TestRole_CreateErrorForVersion0(t *testing.T) {
 	// Create mock backend
 	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
 
-	// Write the role
+	// Write the role with the now-invalid version 0 (auto was dropped)
 	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 0})
-	assertWarning(t, resp, err, "defaulting to v1")
+	assertError(t, resp, err, "version must")
 }
 
-func TestRole_CreateErrorForVersion2(t *testing.T) {
+func TestRole_MigratesLegacyVersion0(t *testing.T) {
 	// Create mock backend
-	backend, storage, _ := testBackendWithNetbox(t, netboxUserFound)
+	_, storage := testBackend(t)
 
-	// Write the role
-	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 2})
-	assertError(t, resp, err, "v2 tokens are not yet supported")
+	// Simulate a v0.4.0 role stored with version 0 (auto), writing it directly
+	// to storage to bypass the write-path validation that now rejects 0
+	entry, err := logical.StorageEntryJSON(roleStoragePath("legacy"), &netboxRole{Username: "test", Version: 0})
+	if err != nil {
+		t.Fatalf("StorageEntryJSON returned err: %v", err)
+	}
+	if err := storage.Put(t.Context(), entry); err != nil {
+		t.Fatalf("storage.Put returned err: %v", err)
+	}
+
+	// Read it back; the legacy version 0 must be migrated to v1
+	role, err := getRole(t.Context(), storage, "legacy")
+	if err != nil {
+		t.Fatalf("getRole returned an error: %v", err)
+	}
+
+	assertEqual(t, 1, role.Version)
 }

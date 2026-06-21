@@ -141,3 +141,17 @@ func assertDescription(t *testing.T, role string, body map[string]any) {
 		t.Fatalf("want= %v, got=%v", want, got)
 	}
 }
+
+func assertMissing(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	if _, ok := body[key]; ok {
+		t.Fatalf("got %v, want %q not present", body, key)
+	}
+}
+
+func assertPresent(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	if _, ok := body[key]; !ok {
+		t.Fatalf("got %v, want %q present", body, key)
+	}
+}

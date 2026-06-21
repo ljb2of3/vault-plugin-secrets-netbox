@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/vault/sdk/logical"
+	"golang.org/x/mod/semver"
 )
 
 type netboxClient struct {
@@ -148,7 +149,8 @@ func (c *netboxClient) doRequest(ctx context.Context, method string, path string
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("%w: %d %s", errUnexpectedStatus, resp.StatusCode, http.StatusText(resp.StatusCode))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512)) // truncate — Django debug 500s can be huge
+		return fmt.Errorf("%w: %d %s: %s", errUnexpectedStatus, resp.StatusCode, http.StatusText(resp.StatusCode), body)
 	}
 
 	if output != nil {
@@ -201,6 +203,45 @@ func (c *netboxClient) resolveUserID(ctx context.Context, username string) (int,
 	return data.Results[0].ID, nil
 }
 
+func (c *netboxClient) getTokenContract(ctx context.Context) (tokenContract, error) {
+	data := struct {
+		NetboxVersion string `json:"netbox-version"`
+	}{}
+
+	err := c.doRequest(ctx, "GET", "/api/status/", nil, &data)
+	if err != nil {
+		return unknownContract, err
+	}
+
+	if data.NetboxVersion == "" {
+		return unknownContract, errUnknownContract
+	}
+
+	version := "v" + data.NetboxVersion
+
+	if !semver.IsValid(version) {
+		return unknownContract, errUnknownContract
+	}
+
+	switch {
+	case semver.Compare(version, "v4.5.0") < 0:
+		return oldContract, nil
+	case semver.Compare(version, "v4.6.1") < 0:
+		return newContractNoV2, nil
+	default:
+		return newContract, nil
+	}
+}
+
+type tokenContract int
+
+const (
+	unknownContract tokenContract = iota
+	oldContract
+	newContractNoV2
+	newContract
+)
+
 var (
 	errNetboxNotConfigured  = errors.New("netbox backend not configured")
 	errBuildingRequest      = errors.New("bad request")
@@ -211,4 +252,5 @@ var (
 	errUserNotFound         = errors.New("user not found")
 	errUnexpectedNumResults = errors.New("unexpected number of results")
 	errWrongUser            = errors.New("query returned wrong user")
+	errUnknownContract      = errors.New("unknown token api contract")
 )

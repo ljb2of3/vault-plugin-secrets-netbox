@@ -8,10 +8,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
-func TestResolveUserID(t *testing.T) {
+func TestClient_ResolveUserID(t *testing.T) {
 	tests := []struct {
 		name        string
 		username    string
@@ -90,8 +91,10 @@ func TestResolveUserID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// A stand-in NetBox that always returns one user.
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasPrefix(r.URL.Path, "/api/users/users/") {
+					t.Errorf("got %q, want /api/users/users/", r.URL.Path)
+				}
 				w.Header().Set("Content-Type", "application/json")
 				if tt.simStatus != 0 {
 					w.WriteHeader(tt.simStatus)
@@ -120,4 +123,121 @@ func TestResolveUserID(t *testing.T) {
 		})
 	}
 
+}
+
+func TestClient_GetVersionContract(t *testing.T) {
+
+	tests := []struct {
+		name         string
+		simResponse  string
+		simStatus    int
+		wantContract tokenContract
+		wantErr      error
+		breakServer  bool
+	}{
+		{
+			name:         "old contract",
+			simResponse:  `{"netbox-version": "3.7.8"}`,
+			wantContract: oldContract,
+			wantErr:      nil,
+		},
+		{
+			name:         "old contract boundary",
+			simResponse:  `{"netbox-version": "4.4.10"}`,
+			wantContract: oldContract,
+			wantErr:      nil,
+		},
+		{
+			name:         "partial new contract boundary",
+			simResponse:  `{"netbox-version": "4.5.0"}`,
+			wantContract: newContractNoV2,
+			wantErr:      nil,
+		},
+		{
+			name:         "partial new contract2",
+			simResponse:  `{"netbox-version": "4.6.0"}`,
+			wantContract: newContractNoV2,
+			wantErr:      nil,
+		},
+		{
+			name:         "fully working new contract boundary",
+			simResponse:  `{"netbox-version": "4.6.1"}`,
+			wantContract: newContract,
+			wantErr:      nil,
+		},
+		{
+			name:         "fully working new contract",
+			simResponse:  `{"netbox-version": "4.6.2"}`,
+			wantContract: newContract,
+			wantErr:      nil,
+		},
+		{
+			name:         "missing version",
+			simResponse:  `{}`,
+			wantContract: unknownContract,
+			wantErr:      errUnknownContract,
+		},
+		{
+			name:         "malformed version",
+			simResponse:  `{"netbox-version": "broken"}`,
+			wantContract: unknownContract,
+			wantErr:      errUnknownContract,
+		},
+		{
+			name:         "malformed json",
+			simResponse:  `{"netbox-version" "4.0.0"}`,
+			wantContract: unknownContract,
+			wantErr:      errInvalidResponseBody,
+		},
+		{
+			name:         "server error",
+			simStatus:    500,
+			wantContract: unknownContract,
+			wantErr:      errUnexpectedStatus,
+		},
+		{
+			name:      "auth failure",
+			simStatus: 403,
+			wantErr:   errUnexpectedStatus,
+		},
+		{
+			name:        "transport failure",
+			wantErr:     errRequestFailure,
+			breakServer: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/status/" {
+					t.Errorf("got path %q, want /api/status/", r.URL.Path)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if tt.simStatus != 0 {
+					w.WriteHeader(tt.simStatus)
+				}
+				w.Write([]byte(tt.simResponse))
+			}))
+			defer srv.Close()
+
+			if tt.breakServer {
+				srv.Close()
+			}
+
+			client, err := newClient(&netboxConfig{URL: srv.URL, Token: "test"})
+			if err != nil {
+				t.Fatalf("got %v, want nil", err)
+			}
+
+			contract, err := client.getTokenContract(context.Background())
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("got %v, want %v", err, tt.wantErr)
+			}
+			if contract != tt.wantContract {
+				t.Errorf("got %v, want %v", contract, tt.wantContract)
+			}
+		})
+	}
 }

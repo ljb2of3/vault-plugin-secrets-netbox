@@ -83,7 +83,7 @@ func backend() *netboxBackend {
 		Invalidate: b.invalidate,
 
 		// RunningVersion reports the version string to the vault core
-		RunningVersion: Version,
+		RunningVersion: version,
 	}
 
 	return &b

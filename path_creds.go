@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/vault/sdk/framework"
@@ -28,6 +29,7 @@ type netboxTokenRequest struct {
 	AllowedIPs   []string `json:"allowed_ips,omitempty"`
 	Version      int      `json:"version,omitempty"`
 	Key          string   `json:"key,omitempty"`
+	Token        string   `json:"token,omitempty"`
 }
 
 type netboxTokenResponse struct {
@@ -117,23 +119,50 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 		tokenRequest.AllowedIPs = role.AllowedIPs
 	}
 
-	// Optionally set Version
-	if role.Version != 0 {
-		tokenRequest.Version = role.Version
-	}
-
-	// TEMPORARY, always generate V1 token
-	token, err := generateTokenKey()
+	// Detect token contract support
+	contract, err := c.getTokenContract(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tokenRequest.Key = token
+	// Abort if requesting version 2 on an unsupported server
+	if role.Version == 2 && contract != newContract {
+		return nil, errV2Unsupported
+	}
+
+	var secretData map[string]any
+
+	switch role.Version {
+	case 1:
+		token, err := generateTokenKey()
+		if err != nil {
+			return nil, err
+		}
+
+		// we create v1 secret, set it now
+		secretData = map[string]any{"token": token}
+
+		if contract == oldContract {
+			tokenRequest.Key = token
+		} else {
+			tokenRequest.Token = token
+			tokenRequest.Version = 1
+		}
+	case 2:
+		tokenRequest.Version = 2
+	default:
+		// This should be impossible given we control what can be set
+		// this guard is to just avoid unexpected behaviour in the future
+		return nil, errUnknownVersion
+	}
 
 	// Sent request to netbox
 	tokenResponse := netboxTokenResponse{}
 	err = c.doRequest(ctx, "POST", "/api/users/tokens/", &tokenRequest, &tokenResponse)
 	if err != nil {
+		if role.Version == 2 && errors.Is(err, errUnexpectedStatus) && strings.Contains(err.Error(), "API_TOKEN_PEPPERS") {
+			return nil, errPepperNotConfigured
+		}
 		return nil, err
 	}
 
@@ -142,10 +171,15 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 		return nil, errors.New("netbox didn't return a token ID")
 	}
 
-	// Build secret
-	secretData := map[string]any{"token": tokenRequest.Key} // Always returns v1 token we generated
+	// Store the token ID
 	secretInternal := map[string]any{"token_id": tokenResponse.ID}
 
+	// v2 secret only exists in response from netbox
+	if role.Version == 2 {
+		secretData = map[string]any{"token": fmt.Sprintf("nbt_%s.%s", tokenResponse.Key, tokenResponse.Token)}
+	}
+
+	// build the secret to return to Vault
 	resp := b.Secret(netboxTokenType).Response(secretData, secretInternal)
 	resp.Secret.TTL = role.TTL
 	resp.Secret.MaxTTL = role.MaxTTL
@@ -160,3 +194,9 @@ func generateTokenKey() (string, error) {
 	}
 	return hex.EncodeToString(b), nil // 20 bytes → 40 hex chars
 }
+
+var (
+	errV2Unsupported       = errors.New("v2 token api unsupported")
+	errUnknownVersion      = errors.New("unknown version")
+	errPepperNotConfigured = errors.New("netbox api token peppers not configured, v2 token api unavailable")
+)
