@@ -645,3 +645,26 @@ func TestRole_CreateErrorForVersion0(t *testing.T) {
 	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test", "version": 0})
 	assertError(t, resp, err, "version must")
 }
+
+func TestRole_MigratesLegacyVersion0(t *testing.T) {
+	// Create mock backend
+	_, storage := testBackend(t)
+
+	// Simulate a v0.4.0 role stored with version 0 (auto), writing it directly
+	// to storage to bypass the write-path validation that now rejects 0
+	entry, err := logical.StorageEntryJSON(roleStoragePath("legacy"), &netboxRole{Username: "test", Version: 0})
+	if err != nil {
+		t.Fatalf("StorageEntryJSON returned err: %v", err)
+	}
+	if err := storage.Put(t.Context(), entry); err != nil {
+		t.Fatalf("storage.Put returned err: %v", err)
+	}
+
+	// Read it back; the legacy version 0 must be migrated to v1
+	role, err := getRole(t.Context(), storage, "legacy")
+	if err != nil {
+		t.Fatalf("getRole returned an error: %v", err)
+	}
+
+	assertEqual(t, 1, role.Version)
+}
