@@ -1,20 +1,28 @@
 # Vault Plugin: Dynamic NetBox API Tokens
 
-This is a plugin for [HashiCorp Vault](https://developer.hashicorp.com/vault) that generates ephemeral [NetBox](https://github.com/netbox-community/netbox) API tokens.
+This is a plugin for [HashiCorp Vault](https://developer.hashicorp.com/vault) and [OpenBao](https://openbao.org/) that generates ephemeral [NetBox](https://github.com/netbox-community/netbox) API tokens.
 
 ## Zero to token in 3 commands
 
 ```console
 $ vault write netbox/config url=https://demo.netbox.dev token=dtagjHV3fZaISOqljy045aIccysURLwLBciVTTve
-$ vault write netbox/role/test username=alice
-$ vault read netbox/creds/test
+$ vault write netbox/role/example username=alice
+$ vault read netbox/creds/example
 Key                Value
 ---                -----
-lease_id           netbox/creds/test/Ppvy6GmKSUVT3oW54LThqksw
+lease_id           netbox/creds/example/Ppvy6GmKSUVT3oW54LThqksw
 lease_duration     768h
 lease_renewable    false
 token              4bab6bcb770901c468185d2910455ba4535cbe7f
 ```
+
+## Compatibility
+
+This plugin has been tested with the following:
+
+- Vault 1.15.6 and 2.5.5
+- OpenBao 2.5.5
+- NetBox 3.7.8, 4.4.10, 4.5.10, and 4.6.3
 
 ## Getting Started
 
@@ -72,15 +80,25 @@ sys/               system                         system_81e72f2e               
 
 Now that the plugin is installed, we can configure. You will need the address of a NetBox server, and an existing API token that has rights to create and delete additional API tokens.
 
-Here's a configuration example:
+To configure, write to `netbox/config`. Only `url` and `token` are required. You can also upload a custom CA certificate needed to communicate with NetBox, or disable TLS validation altogether... but you're not doing that in production, right?
 
 ```bash
 vault write netbox/config \
     url=https://demo.netbox.dev \
-    token=dtagjHV3fZaISOqljy045aIccysURLwLBciVTTve
+    token=dtagjHV3fZaISOqljy045aIccysURLwLBciVTTve \
+    insecure=false \
+    ca_cert=@CA.crt
 ```
 
-Additional options are available to either upload a custom CA certificate needed to communicate with NetBox, or even disable TLS validation altogether, but you're not doing that in production, right?
+_NOTE: the @CA.crt syntax above refers to loading the certificate from a file in the current directory named CA.crt. The format is expected to be a PEM encoded certificate._
+
+### Updating the config
+
+Once the config is set, you can also do a partial write to change one or more parameters.
+
+```bash
+vault write netbox/config token=nbt_IlwG23e8Pi4t.usG48PUeeR3owG1S6w7BjPjjAsI2pnwqyZ2EMNSg
+```
 
 See `vault path-help netbox/config` for more information
 
@@ -88,20 +106,24 @@ See `vault path-help netbox/config` for more information
 
 Before generating tokens, you must configure one or more roles. These will map to users on your NetBox server that you would like to generate tokens for.
 
-To create a role, write to `netbox/role/<name>`
-
-At a minimum, you must supply a username. For example:
+To create a role, write to `netbox/role/<name>`. Only `username` is required. The plugin defaults to read-only tokens; see [Token Versions](#token-versions) for `version` options.
 
 ```bash
-vault write netbox/role/test username=alice
+vault write netbox/role/example \
+    username=alice \
+    write_enabled=false \
+    version=2 \
+    allowed_ips="203.0.113.0/24,2001:db8::/32" \
+    ttl=5m \
+    max_ttl=1h
 ```
 
-Additional options are available to set the token version (see below), tune the ttl on generated tokens, set IPs allowed to use the tokens, or enable write access. Note that this plugin defaults to generating read-only tokens. See `vault path-help netbox/role/name` for more information.
+### Updating a role
 
-To create a role to generate write enabled tokens:
+Once a role is configured, you can also do a partial write to change one or more parameters.
 
 ```bash
-vault write netbox/role/test-write username=bob write_enabled=true
+vault write netbox/role/example write_enabled=true
 ```
 
 ### Generate Tokens
@@ -109,23 +131,23 @@ vault write netbox/role/test-write username=bob write_enabled=true
 To get a NetBox token, read from `netbox/creds/<role>`. For example:
 
 ```console
-$ vault read netbox/creds/test
+$ vault read netbox/creds/example
 Key                Value
 ---                -----
-lease_id           netbox/creds/test/Ppvy6GmKSUVT3oW54LThqksw
-lease_duration     768h
+lease_id           netbox/creds/example/ybbQLm8hU1AKciRdmJAYb8Pt
+lease_duration     5m
 lease_renewable    false
-token              4bab6bcb770901c468185d2910455ba4535cbe7f
+token              nbt_Qpankbs7oLM3.a304eOjNu0lBTaj7nxZiFmiONcDh5MCdEH8HMC3W
 ```
 
 ### Token Versions
 
 Roles mint v1 tokens by default. Set `version` on the role to choose:
 
-- **v1** (default): legacy tokens, used as `Authorization: Token <token>`. Works on all supported NetBox. Deprecated upstream, to be removed in NetBox 5.0.
+- **v1** (default): legacy tokens, used as `Authorization: Token <token>`. Works on all current versions of NetBox. Deprecated upstream, to be removed in NetBox 5.0.
 - **v2** (`version=2`): modern tokens, prefixed `nbt_`, used as `Authorization: Bearer <token>`. Requires NetBox 4.6.1+ with `API_TOKEN_PEPPERS` set on the server.
 
-The auth scheme differs by version, so it's a deliberate per-role choice — there's no auto-upgrade. Requesting `version=2` on a server that can't support it fails rather than silently downgrading.
+The auth scheme differs by version, so it's a deliberate per-role choice. Requesting `version=2` on a server that can't support it fails rather than silently downgrading.
 
 ```console
 $ vault write netbox/role/modern username=alice version=2
@@ -187,9 +209,9 @@ These days software development with AI is the norm. That said...
 
 However, [Claude Code](https://claude.com/product/claude-code) was used in the following ways during development:
 - To perform code reviews, and as a research assistant
-- To design, and occasionally implement, test cases so no edge cases were forgotten
 - Occasionally generated small code snippets (<10 lines)
     - These were reviewed and placed into the plugin codebase by hand
+- To design, and occasionally implement, test cases so no edge cases were forgotten
 - Directly generated CI configurations which were reviewed by me prior to commit
 
 ## Additional Information
