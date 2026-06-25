@@ -37,7 +37,7 @@ This is a Vault plugin and is meant to work with Vault. This guide assumes you h
 2. Copy the binary into the `plugin_directory` on each of your Vault servers.
 3. Use [`vault plugin register`](https://developer.hashicorp.com/vault/docs/commands/plugin/register) to add your plugin to the catalog. For example:
 ```bash
-VERSION=0.5.0    # the release you downloaded
+VERSION=0.5.1    # the release you downloaded
 SHA256=...       # this binary's entry in the verified SHA256SUMS file
 
 vault plugin register \
@@ -56,7 +56,7 @@ alicloud                             auth        v0.23.1+builtin
 approle                              auth        v2.0.2+builtin.vault
 ...                                  ...         ...
 transit                              secret      v2.0.2+builtin.vault
-vault-plugin-secrets-netbox          secret      v0.5.0
+vault-plugin-secrets-netbox          secret      v0.5.1
 ```
 5. Enable the plugin
 ```bash
@@ -171,7 +171,7 @@ from the [releases page](https://github.com/ljb2of3/vault-plugin-secrets-netbox/
 then verify the signature on the checksums:
 
 ```bash
-VERSION=0.5.0    # the release you downloaded
+VERSION=0.5.1    # the release you downloaded
 
 cosign verify-blob \
     --certificate "vault-plugin-secrets-netbox_${VERSION}_SHA256SUMS.pem" \
