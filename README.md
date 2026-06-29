@@ -166,16 +166,15 @@ Release binaries are signed with [cosign](https://github.com/sigstore/cosign) us
 signing, and the checksums are published as `SHA256SUMS`. Before trusting a binary you can
 verify it genuinely came from this repo's release pipeline.
 
-Download the binary you want along with `SHA256SUMS`, `SHA256SUMS.pem`, and `SHA256SUMS.sig`
+Download the binary you want along with `SHA256SUMS` and `SHA256SUMS.sigstore.json`
 from the [releases page](https://github.com/ljb2of3/vault-plugin-secrets-netbox/releases),
 then verify the signature on the checksums:
 
 ```bash
-VERSION=0.5.1    # the release you downloaded
+VERSION=0.6.0    # the release you downloaded
 
 cosign verify-blob \
-    --certificate "vault-plugin-secrets-netbox_${VERSION}_SHA256SUMS.pem" \
-    --signature "vault-plugin-secrets-netbox_${VERSION}_SHA256SUMS.sig" \
+    --bundle "vault-plugin-secrets-netbox_${VERSION}_SHA256SUMS.sigstore.json" \
     --certificate-identity "https://github.com/ljb2of3/vault-plugin-secrets-netbox/.github/workflows/release.yml@refs/tags/v${VERSION}" \
     --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
     "vault-plugin-secrets-netbox_${VERSION}_SHA256SUMS"
