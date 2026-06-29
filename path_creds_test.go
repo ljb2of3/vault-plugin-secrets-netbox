@@ -69,6 +69,12 @@ func TestCreds_ReadTokenOK_OldContract(t *testing.T) {
 
 			// Assert we got the token ID
 			assertEqual(t, tt.handlerReturn["id"].(int), resp.Secret.InternalData["token_id"])
+
+			// Assert we got the role name
+			assertEqual(t, "test", resp.Secret.InternalData["role"])
+
+			// Assert the token is renewable
+			assertEqual(t, true, resp.Secret.Renewable)
 		})
 	}
 }

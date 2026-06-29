@@ -172,7 +172,10 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 	}
 
 	// Store the token ID
-	secretInternal := map[string]any{"token_id": tokenResponse.ID}
+	secretInternal := map[string]any{
+		"role":     name,
+		"token_id": tokenResponse.ID,
+	}
 
 	// v2 secret only exists in response from netbox
 	if role.Version == 2 {
