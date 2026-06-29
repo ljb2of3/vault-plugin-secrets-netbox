@@ -104,6 +104,8 @@ func TestSecretToken_RenewUpdatesNetboxExpire(t *testing.T) {
 
 			handler := func(w http.ResponseWriter, r *http.Request) {
 				switch {
+				case r.URL.Path == "/api/users/users/" && r.Method == "GET":
+					netboxUserFound(w, r)
 				case r.URL.Path == "/api/users/tokens/42/" && r.Method == "PATCH":
 					// decode request
 					data := map[string]any{}
@@ -169,6 +171,8 @@ func TestSecretToken_RenewFatalWhenNetboxErrors(t *testing.T) {
 	// Create custom handler to error after role setup
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/users/users/" && r.Method == "GET":
+			netboxUserFound(w, r)
 		case r.URL.Path == "/api/users/tokens/42/" && r.Method == "PATCH":
 			hits++
 			gotPath = r.URL.Path
@@ -205,6 +209,8 @@ func TestSecretToken_RenewFatalWhenTokenNotFound(t *testing.T) {
 	// Create custom handler to error after role setup
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/users/users/" && r.Method == "GET":
+			netboxUserFound(w, r)
 		case r.URL.Path == "/api/users/tokens/42/" && r.Method == "PATCH":
 			hits++
 			gotPath = r.URL.Path
