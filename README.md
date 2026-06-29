@@ -62,6 +62,7 @@ vault-plugin-secrets-netbox          secret      v0.5.1
 ```bash
 vault secrets enable \
     -path netbox \
+    -description "Ephemeral NetBox API tokens" \
     vault-plugin-secrets-netbox
 ```
 6. Verify the plugin was enabled with `vault secrets list`
@@ -69,11 +70,12 @@ vault secrets enable \
 $ vault secrets list
 Path               Type                           Accessor                                Description
 ----               ----                           --------                                -----------
-agent-registry/    agent_registry                 agent-registry_d0853b2c                 agent registry
-cubbyhole/         cubbyhole                      cubbyhole_e1c288da                      per-token private secret storage
-identity/          identity                       identity_4103190e                       identity store
-netbox/            vault-plugin-secrets-netbox    vault-plugin-secrets-netbox_31d45f2d    ephemeral netbox tokens
-sys/               system                         system_81e72f2e                         system endpoints used for control, policy and debugging
+agent-registry/    agent_registry                 agent-registry_429ae6bb                 agent registry
+cubbyhole/         cubbyhole                      cubbyhole_d39bcebd                      per-token private secret storage
+identity/          identity                       identity_72c2d897                       identity store
+netbox/            vault-plugin-secrets-netbox    vault-plugin-secrets-netbox_66f0c9bb    Ephemeral NetBox API tokens
+secret/            kv                             kv_d8bca533                             key/value secret storage
+sys/               system                         system_32f65a0e                         system endpoints used for control, policy and debugging
 ```
 
 ### Configuration
