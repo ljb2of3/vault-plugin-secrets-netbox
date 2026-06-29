@@ -69,3 +69,8 @@ func (b *netboxBackend) revokeToken(ctx context.Context, req *logical.Request, d
 	}
 
 }
+
+var (
+	errTokenNotFound = errors.New("token not found")
+	errRoleNotFound  = errors.New("role not found")
+)

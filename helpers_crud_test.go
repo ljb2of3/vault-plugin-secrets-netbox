@@ -6,6 +6,7 @@ package secretengine
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/vault/sdk/logical"
 )
@@ -136,6 +137,25 @@ func tokenRevoke(t *testing.T, b *netboxBackend, s logical.Storage, id int) (*lo
 			InternalData: map[string]any{
 				"secret_type": netboxTokenType,
 				"token_id":    float64(id), // vault will internally pass a float64, so we type cast
+			},
+		},
+	})
+}
+
+// Renew a token
+func tokenRenew(t *testing.T, b *netboxBackend, s logical.Storage, id int, role string, inc time.Duration) (*logical.Response, error) {
+	t.Helper()
+	return b.HandleRequest(t.Context(), &logical.Request{
+		Operation: logical.RenewOperation,
+		Storage:   s,
+		Secret: &logical.Secret{
+			InternalData: map[string]any{
+				"secret_type": netboxTokenType,
+				"token_id":    float64(id), // vault will internally pass a float64, so we type cast
+				"role":        role,
+			},
+			LeaseOptions: logical.LeaseOptions{
+				Increment: inc,
 			},
 		},
 	})
