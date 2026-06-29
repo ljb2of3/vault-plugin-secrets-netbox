@@ -18,8 +18,19 @@ import (
 
 const netboxGracePeriod = 5 * time.Minute
 
-const pathCredsHelpSynopsis = `Mints a netbox token`
-const pathCredsListDescription = `Mints a netbox token`
+const pathCredsHelpSynopsis = `Mint a NetBox API token for a role.`
+
+const pathCredsHelpDescription = `
+Reading this path mints a new NetBox API token for the named role and returns
+it under a Vault lease. When the lease expires or is revoked, Vault deletes the
+token in NetBox.
+
+The role must already exist (see <mount>/role/<name>) and the backend must be
+configured (see <mount>/config).
+
+Example:
+
+  vault read <mount>/creds/<role>`
 
 type netboxTokenRequest struct {
 	User         int      `json:"user"`
@@ -43,8 +54,9 @@ func pathCreds(b *netboxBackend) *framework.Path {
 		Pattern: "creds/" + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
 			"name": {
-				Type:     framework.TypeLowerCaseString,
-				Required: true,
+				Type:        framework.TypeLowerCaseString,
+				Description: "Name of the role to mint a token for.",
+				Required:    true,
 			},
 		},
 		Operations: map[logical.Operation]framework.OperationHandler{
@@ -53,7 +65,7 @@ func pathCreds(b *netboxBackend) *framework.Path {
 			},
 		},
 		HelpSynopsis:    pathCredsHelpSynopsis,
-		HelpDescription: pathCredsListDescription,
+		HelpDescription: pathCredsHelpDescription,
 	}
 }
 

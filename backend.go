@@ -33,10 +33,19 @@ type netboxBackend struct {
 }
 
 const rootHelp = `
-The Netbox secrets backend dynamically generates API tokens. 
-Use config/ to set the netbox url and admin credentials with permissions to generate tokens.
-Then create a role/<name> to configure a username to generate a token for.
-Call creds/<role> to generate a token.`
+The NetBox secrets backend dynamically generates short-lived NetBox API tokens.
+
+Getting started is a three step workflow:
+
+  1. Configure the backend at config/ with the NetBox server URL and an admin
+     API token that has permission to create and delete tokens.
+  2. Define one or more roles at role/<name>, each mapping to a NetBox username
+     along with the settings (TTL, write access, allowed IPs, token version)
+     applied to tokens minted for that role.
+  3. Read creds/<role> to mint a token. Vault leases the token and revokes it
+     in NetBox when the lease expires or is revoked.
+
+See the help for each path (e.g. "vault path-help <mount>/config") for details.`
 
 // This func wires up our backend struct and provides config for our plugin
 func backend() *netboxBackend {

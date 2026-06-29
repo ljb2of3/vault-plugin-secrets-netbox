@@ -23,7 +23,7 @@ func (b *netboxBackend) netboxToken() *framework.Secret {
 		Fields: map[string]*framework.FieldSchema{
 			"token": {
 				Type:        framework.TypeString,
-				Description: "Netbox Token",
+				Description: "The generated NetBox API token.",
 			},
 		},
 		Revoke: b.revokeToken,

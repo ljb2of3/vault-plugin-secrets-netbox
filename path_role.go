@@ -29,18 +29,38 @@ type netboxRole struct {
 }
 
 // <mount>/role/*
-const pathRoleHelpSynopsis = `
-Configure netbox roles`
+const pathRoleHelpSynopsis = `Manage roles that map Vault leases to NetBox users.`
 
 const pathRoleHelpDescription = `
-Each role maps to a specific netbox username, and has various config options. 
-Multiple roles may point at the same user with different settings.`
+Each role maps to a NetBox username and defines the settings applied to tokens
+minted for it. Multiple roles may point at the same user with different
+settings.
 
-const pathRoleListHelpSynopsis = `
-List netbox roles`
+Fields:
+
+  * username      (required) - The NetBox user that minted tokens belong to.
+  * write_enabled            - Whether minted tokens have write access.
+                               Defaults to false (read-only).
+  * allowed_ips              - Comma-separated CIDRs allowed to use the token.
+  * version                  - Token API version to mint: 1 (legacy key token)
+                               or 2 (pepper/secret token). Defaults to the
+                               server-appropriate version.
+  * ttl                      - Default lease duration for minted tokens.
+                               0 uses the system default.
+  * max_ttl                  - Maximum lease duration for minted tokens.
+                               0 uses the system default.
+
+Example:
+
+  vault write <mount>/role/<name> \
+      username=svc-account \
+      write_enabled=true \
+      ttl=1h max_ttl=24h`
+
+const pathRoleListHelpSynopsis = `List configured NetBox roles.`
 
 const pathRoleHelpListDescription = `
-Lists all configured netbox roles`
+Lists the names of all roles configured on this mount.`
 
 func pathRole(b *netboxBackend) []*framework.Path {
 	return []*framework.Path{
@@ -48,12 +68,13 @@ func pathRole(b *netboxBackend) []*framework.Path {
 			Pattern: "role/" + framework.GenericNameRegex("name"),
 			Fields: map[string]*framework.FieldSchema{
 				"name": {
-					Type:     framework.TypeLowerCaseString,
-					Required: true,
+					Type:        framework.TypeLowerCaseString,
+					Description: "Name of the role.",
+					Required:    true,
 				},
 				"username": {
 					Type:        framework.TypeString,
-					Description: "The netbox user assigned to the token minted.",
+					Description: "The NetBox user assigned to the token minted.",
 					Required:    true,
 					DisplayAttrs: &framework.DisplayAttributes{
 						Name: "username",
@@ -76,7 +97,7 @@ func pathRole(b *netboxBackend) []*framework.Path {
 				},
 				"version": {
 					Type:        framework.TypeInt,
-					Description: "Version of token to mint. Allowed values are 1 or 2",
+					Description: "Token API version to mint: 1 (legacy key token) or 2 (pepper/secret token).",
 					DisplayAttrs: &framework.DisplayAttributes{
 						Name: "Version",
 					},
@@ -284,11 +305,11 @@ func (b *netboxBackend) pathRoleWrite(ctx context.Context, req *logical.Request,
 		if err != nil {
 			switch {
 			case errors.Is(err, errNetboxNotConfigured):
-				resp.AddWarning("Netbox backend not configured. Be sure to write to /config before minting tokens.")
+				resp.AddWarning("NetBox backend not configured. Be sure to write to /config before minting tokens.")
 			case errors.Is(err, errRequestFailure):
-				resp.AddWarning(fmt.Sprintf("Unable to validate username because netbox was unreachable: %v", err))
+				resp.AddWarning(fmt.Sprintf("Unable to validate username because NetBox was unreachable: %v", err))
 			case errors.Is(err, errUserNotFound):
-				resp.AddWarning(fmt.Sprintf("%q not a valid netbox user. Create netbox user before minting tokens.", username.(string)))
+				resp.AddWarning(fmt.Sprintf("%q not a valid NetBox user. Create NetBox user before minting tokens.", username.(string)))
 			default:
 				return nil, err
 			}

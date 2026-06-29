@@ -434,7 +434,7 @@ func TestRole_CreateWarnWhenNetboxUnreachable(t *testing.T) {
 	resp, err := roleCreateDefault(t, backend, storage)
 
 	// Assert we got a warning about netbox being unreachable
-	assertWarning(t, resp, err, "netbox was unreachable")
+	assertWarning(t, resp, err, "NetBox was unreachable")
 
 	// Validate role was actually written
 	role, err := getRole(t.Context(), storage, "test")
@@ -458,7 +458,7 @@ func TestRole_CreateWarnWhenNotConfigured(t *testing.T) {
 	// Write test role
 	resp, err := roleCreateDefault(t, backend, storage)
 
-	// Expect warning `Netbox backend not configured. Be sure to write to /config before minting tokens.`
+	// Expect warning `NetBox backend not configured. Be sure to write to /config before minting tokens.`
 	assertWarning(t, resp, err, "not configured")
 
 	// Validate role was actually written

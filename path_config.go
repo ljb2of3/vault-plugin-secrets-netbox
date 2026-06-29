@@ -25,12 +25,30 @@ type netboxConfig struct {
 }
 
 // <mount>/config
-const pathConfigHelpSynopsis = `
-Configure the Netbox backend`
+const pathConfigHelpSynopsis = `Configure the connection to NetBox.`
 
 const pathConfigHelpDescription = `
-The Netbox secret backend requires a Netbox server URL
-and credentials for creating and destroying API tokens`
+Stores the NetBox server URL and an admin API token used to mint and revoke
+tokens. This must be written before creating roles or minting tokens.
+
+Fields:
+
+  * url   (required) - Base URL of the NetBox server, e.g. https://netbox.example.
+  * token (required) - An existing NetBox API token with permission to create
+                       and delete tokens.
+  * insecure          - Skip verification of the NetBox server's TLS certificate.
+                        Defaults to false; do not enable in production.
+  * ca_cert           - PEM-encoded CA certificate that signed the NetBox
+                        server's certificate, for private CAs.
+
+Example:
+
+  vault write <mount>/config \
+      url=https://netbox.example \
+      token=<admin-token>
+
+The configuration can be partially updated by writing only the fields you want
+to change.`
 
 // pathConfig extends the Vault API with a `/config` endpoint for this backend
 func pathConfig(b *netboxBackend) *framework.Path {
@@ -42,7 +60,7 @@ func pathConfig(b *netboxBackend) *framework.Path {
 		Fields: map[string]*framework.FieldSchema{
 			"url": {
 				Type:        framework.TypeString,
-				Description: "The URL for the Netbox server",
+				Description: "The URL for the NetBox server",
 				Required:    true,
 				DisplayAttrs: &framework.DisplayAttributes{
 					Name:      "URL",
@@ -51,7 +69,7 @@ func pathConfig(b *netboxBackend) *framework.Path {
 			},
 			"token": {
 				Type:        framework.TypeString,
-				Description: "The token used to access Netbox",
+				Description: "The token used to access NetBox",
 				Required:    true,
 				DisplayAttrs: &framework.DisplayAttributes{
 					Name:      "Token",
@@ -60,7 +78,7 @@ func pathConfig(b *netboxBackend) *framework.Path {
 			},
 			"insecure": {
 				Type:        framework.TypeBool,
-				Description: "Disable validation of the Netbox server's TLS certificate",
+				Description: "Disable validation of the NetBox server's TLS certificate",
 				Required:    false,
 				Default:     false,
 				DisplayAttrs: &framework.DisplayAttributes{
@@ -70,7 +88,7 @@ func pathConfig(b *netboxBackend) *framework.Path {
 			},
 			"ca_cert": {
 				Type:        framework.TypeString,
-				Description: "CA certifcate that signed the Netbox server's cert",
+				Description: "CA certificate that signed the NetBox server's cert",
 				Required:    false,
 				Default:     "",
 				DisplayAttrs: &framework.DisplayAttributes{
