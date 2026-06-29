@@ -144,6 +144,54 @@ func TestSecretToken_RenewUpdatesNetboxExpire(t *testing.T) {
 	}
 }
 
+func TestSecretToken_RenewRespectsIssueTime(t *testing.T) {
+	var gotBody map[string]any
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/users/users/" && r.Method == "GET":
+			netboxUserFound(w, r)
+		case r.URL.Path == "/api/users/tokens/42/" && r.Method == "PATCH":
+			// decode request
+			data := map[string]any{}
+			if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+				t.Errorf("Unparseable request body: %v", err)
+				w.WriteHeader(500)
+				return
+			}
+
+			// Store body so we can assert it later
+			gotBody = data
+
+			// Respond to the token request
+			w.WriteHeader(204)
+			w.Write([]byte{})
+
+		default:
+			t.Errorf("Unexpected HTTP call %s %s", r.Method, r.URL.Path)
+		}
+	}
+
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, handler)
+
+	// Write test role that wants a full hour but is capped at a one hour max
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{
+		"username": "test",
+		"ttl":      time.Hour,
+		"max_ttl":  time.Hour,
+	})
+	assertOK(t, resp, err)
+
+	// Renew a token that was issued 45 minutes ago
+	issued := time.Now().Add(-45 * time.Minute)
+	resp, err = tokenRenewAt(t, backend, storage, 42, "test", 0, issued)
+	assertOK(t, resp, err)
+
+	// Assert the token only has the 15 minutes left on its max_ttl, not a fresh hour
+	assertExpireTime(t, gotBody, 15*time.Minute)
+}
+
 func TestSecretToken_RenewFatalWhenNetboxDown(t *testing.T) {
 	// Create mock backend
 	backend, storage, srv := testBackendWithNetbox(t, netboxUserFound)

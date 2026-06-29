@@ -145,6 +145,12 @@ func tokenRevoke(t *testing.T, b *netboxBackend, s logical.Storage, id int) (*lo
 // Renew a token
 func tokenRenew(t *testing.T, b *netboxBackend, s logical.Storage, id int, role string, inc time.Duration) (*logical.Response, error) {
 	t.Helper()
+	return tokenRenewAt(t, b, s, id, role, inc, time.Time{})
+}
+
+// Renew a token issued at a specific time
+func tokenRenewAt(t *testing.T, b *netboxBackend, s logical.Storage, id int, role string, inc time.Duration, issued time.Time) (*logical.Response, error) {
+	t.Helper()
 	return b.HandleRequest(t.Context(), &logical.Request{
 		Operation: logical.RenewOperation,
 		Storage:   s,
@@ -156,6 +162,7 @@ func tokenRenew(t *testing.T, b *netboxBackend, s logical.Storage, id int, role 
 			},
 			LeaseOptions: logical.LeaseOptions{
 				Increment: inc,
+				IssueTime: issued,
 			},
 		},
 	})
