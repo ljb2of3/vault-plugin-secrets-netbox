@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-06-30
+
 ### Fixed
 
 - Token renewal no longer breaks the issued token on NetBox 3.6.0–4.0.9. On those
@@ -105,7 +107,8 @@ First versioned, release-tooled build.
 - Initial release. Plugin scaffolding, the `config/` endpoint for the NetBox
   server URL and admin API token, and the NetBox API client.
 
-[Unreleased]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.4.0...v0.5.0
