@@ -5,6 +5,7 @@ package secretengine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -69,4 +70,39 @@ func netboxResponds404(w http.ResponseWriter, r *http.Request) {
 func netboxResponds500(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(500)
 	w.Write([]byte{})
+}
+
+// renewHandler builds an httptest handler for renewal tests. It resolves the
+// role's user (role creation needs it), serves /api/status/ with the given
+// NetBox version (renewToken probes it via renewRequiresKey), and routes the
+// PATCH of token 42 to patch. Any other request fails the test.
+func renewHandler(t *testing.T, version string, patch http.HandlerFunc) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/users/users/" && r.Method == http.MethodGet:
+			netboxUserFound(w, r)
+		case r.URL.Path == "/api/status/" && r.Method == http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"netbox-version": %q}`, version)
+		case r.URL.Path == "/api/users/tokens/42/" && r.Method == http.MethodPatch:
+			patch(w, r)
+		default:
+			t.Errorf("Unexpected HTTP call %s %s", r.Method, r.URL.Path)
+		}
+	}
+}
+
+// capturePatch returns a PATCH responder that decodes the JSON request body
+// into *dst and replies 204.
+func capturePatch(t *testing.T, dst *map[string]any) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+			t.Errorf("Unparseable request body: %v", err)
+			w.WriteHeader(500)
+			return
+		}
+		w.WriteHeader(204)
+	}
 }

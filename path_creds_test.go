@@ -55,9 +55,13 @@ func TestCreds_ReadTokenOK_OldContract(t *testing.T) {
 
 			// assert the token we sent is the one we received
 			assertEqual(t, gotBody["key"], resp.Data["token"].(string))
-			delete(gotBody, "key")
 
-			// We aren't testing the expire time
+			// Assert the token was stored in case we need it to renew
+			assertPresent(t, resp.Secret.InternalData, "key")
+			assertEqual(t, gotBody["key"], resp.Secret.InternalData["key"].(string))
+
+			// Delete fields that won't appear in wantBody because they're computed
+			delete(gotBody, "key")
 			delete(gotBody, "expires")
 
 			// Assert the description
@@ -68,10 +72,12 @@ func TestCreds_ReadTokenOK_OldContract(t *testing.T) {
 			assertEqual(t, tt.wantBody, gotBody)
 
 			// Assert we got the token ID
-			assertEqual(t, tt.handlerReturn["id"].(int), resp.Secret.InternalData["token_id"])
+			assertPresent(t, resp.Secret.InternalData, "token_id")
+			assertEqual(t, tt.handlerReturn["id"].(int), resp.Secret.InternalData["token_id"].(int))
 
 			// Assert we got the role name
-			assertEqual(t, "test", resp.Secret.InternalData["role"])
+			assertPresent(t, resp.Secret.InternalData, "role")
+			assertEqual(t, "test", resp.Secret.InternalData["role"].(string))
 
 			// Assert the token is renewable
 			assertEqual(t, true, resp.Secret.Renewable)
@@ -319,6 +325,9 @@ func TestCreds_NewContract_V1_SendsToken(t *testing.T) {
 	assertEqual(t, float64(1), gotBody["version"])
 	assertEqual(t, gotBody["token"], resp.Data["token"])
 	assertMissing(t, gotBody, "key")
+
+	// Assert that the token was NOT stored
+	assertMissing(t, resp.Secret.InternalData, "key")
 }
 
 func TestCreds_UnsetVersion_V1OnNewContract(t *testing.T) {
@@ -346,6 +355,9 @@ func TestCreds_NewContract_V2(t *testing.T) {
 
 	// Assert that we received the token that we expected
 	assertEqual(t, "nbt_abc123.deadbeef", resp.Data["token"])
+
+	// Assert that the token was NOT stored
+	assertMissing(t, resp.Secret.InternalData, "key")
 }
 
 func TestCreds_V2_FatalBelow461(t *testing.T) {

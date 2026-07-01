@@ -4,7 +4,6 @@
 package secretengine
 
 import (
-	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -101,31 +100,7 @@ func TestSecretToken_RenewUpdatesNetboxExpire(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotBody map[string]any
-
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				switch {
-				case r.URL.Path == "/api/users/users/" && r.Method == "GET":
-					netboxUserFound(w, r)
-				case r.URL.Path == "/api/users/tokens/42/" && r.Method == "PATCH":
-					// decode request
-					data := map[string]any{}
-					if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-						t.Errorf("Unparseable request body: %v", err)
-						w.WriteHeader(500)
-						return
-					}
-
-					// Store body so we can assert it later
-					gotBody = data
-
-					// Respond to the token request
-					w.WriteHeader(204)
-					w.Write([]byte{})
-
-				default:
-					t.Errorf("Unexpected HTTP call %s %s", r.Method, r.URL.Path)
-				}
-			}
+			handler := renewHandler(t, "4.4.0", capturePatch(t, &gotBody))
 
 			// Create mock backend
 			backend, storage, _ := testBackendWithNetbox(t, handler)
@@ -135,7 +110,7 @@ func TestSecretToken_RenewUpdatesNetboxExpire(t *testing.T) {
 			assertOK(t, resp, err)
 
 			// Renew the token
-			resp, err = tokenRenew(t, backend, storage, 42, "test", tt.increment)
+			resp, err = tokenRenew(t, backend, storage, 42, "test", tt.increment, false)
 			assertOK(t, resp, err)
 
 			// Assert the token expire time
@@ -146,31 +121,7 @@ func TestSecretToken_RenewUpdatesNetboxExpire(t *testing.T) {
 
 func TestSecretToken_RenewRespectsIssueTime(t *testing.T) {
 	var gotBody map[string]any
-
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/api/users/users/" && r.Method == "GET":
-			netboxUserFound(w, r)
-		case r.URL.Path == "/api/users/tokens/42/" && r.Method == "PATCH":
-			// decode request
-			data := map[string]any{}
-			if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-				t.Errorf("Unparseable request body: %v", err)
-				w.WriteHeader(500)
-				return
-			}
-
-			// Store body so we can assert it later
-			gotBody = data
-
-			// Respond to the token request
-			w.WriteHeader(204)
-			w.Write([]byte{})
-
-		default:
-			t.Errorf("Unexpected HTTP call %s %s", r.Method, r.URL.Path)
-		}
-	}
+	handler := renewHandler(t, "4.4.0", capturePatch(t, &gotBody))
 
 	// Create mock backend
 	backend, storage, _ := testBackendWithNetbox(t, handler)
@@ -185,7 +136,7 @@ func TestSecretToken_RenewRespectsIssueTime(t *testing.T) {
 
 	// Renew a token that was issued 45 minutes ago
 	issued := time.Now().Add(-45 * time.Minute)
-	resp, err = tokenRenewAt(t, backend, storage, 42, "test", 0, issued)
+	resp, err = tokenRenewAt(t, backend, storage, 42, "test", 0, issued, false)
 	assertOK(t, resp, err)
 
 	// Assert the token only has the 15 minutes left on its max_ttl, not a fresh hour
@@ -204,7 +155,7 @@ func TestSecretToken_RenewFatalWhenNetboxDown(t *testing.T) {
 	srv.Close()
 
 	// Renew a token
-	resp, err = tokenRenew(t, backend, storage, 42, "test", 0*time.Hour)
+	resp, err = tokenRenew(t, backend, storage, 42, "test", 0*time.Hour, false)
 
 	// Assert that this actually failed
 	assertFatal(t, resp, err, "request failure")
@@ -216,20 +167,13 @@ func TestSecretToken_RenewFatalWhenNetboxErrors(t *testing.T) {
 	var gotMethod string
 	var hits int
 
-	// Create custom handler to error after role setup
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/api/users/users/" && r.Method == "GET":
-			netboxUserFound(w, r)
-		case r.URL.Path == "/api/users/tokens/42/" && r.Method == "PATCH":
-			hits++
-			gotPath = r.URL.Path
-			gotMethod = r.Method
-			netboxResponds500(w, r)
-		default:
-			t.Errorf("Unexpected HTTP call %s %s", r.Method, r.URL.Path)
-		}
-	}
+	// Spy on the PATCH, then respond 500
+	handler := renewHandler(t, "4.4.0", func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		gotPath = r.URL.Path
+		gotMethod = r.Method
+		netboxResponds500(w, r)
+	})
 
 	// Create mock backend
 	backend, storage, _ := testBackendWithNetbox(t, handler)
@@ -239,7 +183,7 @@ func TestSecretToken_RenewFatalWhenNetboxErrors(t *testing.T) {
 	assertOK(t, resp, err)
 
 	// Renew a token
-	resp, err = tokenRenew(t, backend, storage, 42, "test", 0*time.Hour)
+	resp, err = tokenRenew(t, backend, storage, 42, "test", 0*time.Hour, false)
 	assertFatal(t, resp, err, "unexpected status")
 
 	// Assert our spy got hit and we got the correct ID and method
@@ -254,20 +198,13 @@ func TestSecretToken_RenewFatalWhenTokenNotFound(t *testing.T) {
 	var gotMethod string
 	var hits int
 
-	// Create custom handler to error after role setup
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/api/users/users/" && r.Method == "GET":
-			netboxUserFound(w, r)
-		case r.URL.Path == "/api/users/tokens/42/" && r.Method == "PATCH":
-			hits++
-			gotPath = r.URL.Path
-			gotMethod = r.Method
-			netboxResponds404(w, r)
-		default:
-			t.Errorf("Unexpected HTTP call %s %s", r.Method, r.URL.Path)
-		}
-	}
+	// Spy on the PATCH, then respond 404
+	handler := renewHandler(t, "4.4.0", func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		gotPath = r.URL.Path
+		gotMethod = r.Method
+		netboxResponds404(w, r)
+	})
 
 	// Create mock backend
 	backend, storage, _ := testBackendWithNetbox(t, handler)
@@ -277,7 +214,7 @@ func TestSecretToken_RenewFatalWhenTokenNotFound(t *testing.T) {
 	assertOK(t, resp, err)
 
 	// Renew a token
-	resp, err = tokenRenew(t, backend, storage, 42, "test", 0*time.Hour)
+	resp, err = tokenRenew(t, backend, storage, 42, "test", 0*time.Hour, false)
 	assertFatalErr(t, resp, err, errTokenNotFound)
 
 	// Assert our spy got hit and we got the correct ID and method
@@ -288,6 +225,71 @@ func TestSecretToken_RenewFatalWhenTokenNotFound(t *testing.T) {
 
 func TestSecretToken_RenewFatalWhenRoleNotFound(t *testing.T) {
 	backend, storage := testBackend(t)
-	resp, err := tokenRenew(t, backend, storage, 42, "test", 0)
+	resp, err := tokenRenew(t, backend, storage, 42, "test", 0, false)
 	assertFatalErr(t, resp, err, errRoleNotFound)
+}
+
+func TestSecretToken_RenewSendsKeyWhenRequired(t *testing.T) {
+	tests := []struct {
+		name          string
+		wantKey       bool
+		netboxVersion string
+	}{
+		{
+			name:          "needs key",
+			wantKey:       true,
+			netboxVersion: "3.7.8",
+		},
+		{
+			name:          "doesn't need key",
+			wantKey:       false,
+			netboxVersion: "4.1.0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotBody map[string]any
+			handler := renewHandler(t, tt.netboxVersion, capturePatch(t, &gotBody))
+
+			// Create mock backend
+			backend, storage, _ := testBackendWithNetbox(t, handler)
+
+			// Write test role
+			resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test"})
+			assertOK(t, resp, err)
+
+			// Renew the token
+			resp, err = tokenRenew(t, backend, storage, 42, "test", 0, true)
+			assertOK(t, resp, err)
+
+			if tt.wantKey {
+				assertPresent(t, gotBody, "key")
+				assertEqual(t, "test", gotBody["key"].(string))
+			} else {
+				assertMissing(t, gotBody, "key")
+			}
+		})
+	}
+}
+
+func TestSecretToken_RenewFatalWhenKeyRequiredButMissing(t *testing.T) {
+	var gotBody map[string]any
+	handler := renewHandler(t, "4.0.9", capturePatch(t, &gotBody))
+
+	// Create mock backend
+	backend, storage, _ := testBackendWithNetbox(t, handler)
+
+	// Write test role
+	resp, err := roleCreate(t, backend, storage, "test", map[string]any{"username": "test"})
+	assertOK(t, resp, err)
+
+	// Renew the token
+	resp, err = tokenRenew(t, backend, storage, 42, "test", 0, false)
+	assertFatalErr(t, resp, err, errRenewKeyMissing)
+
+	// Assert no patch happened
+	if gotBody != nil {
+		t.Errorf("renew should not PATCH when the key is missing, but sent %v", gotBody)
+	}
 }
