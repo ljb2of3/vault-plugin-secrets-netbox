@@ -204,23 +204,9 @@ func (c *netboxClient) resolveUserID(ctx context.Context, username string) (int,
 }
 
 func (c *netboxClient) getTokenContract(ctx context.Context) (tokenContract, error) {
-	data := struct {
-		NetboxVersion string `json:"netbox-version"`
-	}{}
-
-	err := c.doRequest(ctx, "GET", "/api/status/", nil, &data)
+	version, err := c.getVersion(ctx)
 	if err != nil {
 		return unknownContract, err
-	}
-
-	if data.NetboxVersion == "" {
-		return unknownContract, errUnknownContract
-	}
-
-	version := "v" + data.NetboxVersion
-
-	if !semver.IsValid(version) {
-		return unknownContract, errUnknownContract
 	}
 
 	switch {
@@ -231,6 +217,42 @@ func (c *netboxClient) getTokenContract(ctx context.Context) (tokenContract, err
 	default:
 		return newContract, nil
 	}
+}
+
+func (c *netboxClient) renewRequiresKey(ctx context.Context) (bool, error) {
+	version, err := c.getVersion(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	if semver.Compare(version, "v4.0.10") < 0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (c *netboxClient) getVersion(ctx context.Context) (string, error) {
+	data := struct {
+		NetboxVersion string `json:"netbox-version"`
+	}{}
+
+	err := c.doRequest(ctx, "GET", "/api/status/", nil, &data)
+	if err != nil {
+		return "", err
+	}
+
+	if data.NetboxVersion == "" {
+		return "", errUnknownContract
+	}
+
+	version := "v" + data.NetboxVersion
+
+	if !semver.IsValid(version) {
+		return "", errUnknownContract
+	}
+
+	return version, nil
 }
 
 type tokenContract int
