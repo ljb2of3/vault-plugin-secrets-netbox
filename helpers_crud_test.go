@@ -143,27 +143,37 @@ func tokenRevoke(t *testing.T, b *netboxBackend, s logical.Storage, id int) (*lo
 }
 
 // Renew a token
-func tokenRenew(t *testing.T, b *netboxBackend, s logical.Storage, id int, role string, inc time.Duration) (*logical.Response, error) {
+func tokenRenew(t *testing.T, b *netboxBackend, s logical.Storage, id int, role string, inc time.Duration, includeKey bool) (*logical.Response, error) {
 	t.Helper()
-	return tokenRenewAt(t, b, s, id, role, inc, time.Time{})
+	return tokenRenewAt(t, b, s, id, role, inc, time.Time{}, includeKey)
 }
 
 // Renew a token issued at a specific time
-func tokenRenewAt(t *testing.T, b *netboxBackend, s logical.Storage, id int, role string, inc time.Duration, issued time.Time) (*logical.Response, error) {
+func tokenRenewAt(t *testing.T, b *netboxBackend, s logical.Storage, id int, role string, inc time.Duration, issued time.Time, includeKey bool) (*logical.Response, error) {
 	t.Helper()
 	return b.HandleRequest(t.Context(), &logical.Request{
 		Operation: logical.RenewOperation,
 		Storage:   s,
 		Secret: &logical.Secret{
-			InternalData: map[string]any{
-				"secret_type": netboxTokenType,
-				"token_id":    float64(id), // vault will internally pass a float64, so we type cast
-				"role":        role,
-			},
+			InternalData: internalData(id, role, includeKey),
 			LeaseOptions: logical.LeaseOptions{
 				Increment: inc,
 				IssueTime: issued,
 			},
 		},
 	})
+}
+
+func internalData(id int, role string, includeKey bool) map[string]any {
+	data := map[string]any{
+		"secret_type": netboxTokenType,
+		"token_id":    float64(id), // vault will internally pass a float64, so we type cast
+		"role":        role,
+	}
+
+	if includeKey {
+		data["key"] = "test"
+	}
+
+	return data
 }

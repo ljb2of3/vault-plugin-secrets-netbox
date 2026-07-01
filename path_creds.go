@@ -143,6 +143,9 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 	}
 
 	var secretData map[string]any
+	var secretInternal = map[string]any{
+		"role": name,
+	}
 
 	switch role.Version {
 	case 1:
@@ -156,6 +159,7 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 
 		if contract == oldContract {
 			tokenRequest.Key = token
+			secretInternal["key"] = token
 		} else {
 			tokenRequest.Token = token
 			tokenRequest.Version = 1
@@ -184,10 +188,7 @@ func (b *netboxBackend) pathCredsRead(ctx context.Context, req *logical.Request,
 	}
 
 	// Store the token ID
-	secretInternal := map[string]any{
-		"role":     name,
-		"token_id": tokenResponse.ID,
-	}
+	secretInternal["token_id"] = tokenResponse.ID
 
 	// v2 secret only exists in response from netbox
 	if role.Version == 2 {

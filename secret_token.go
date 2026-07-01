@@ -128,6 +128,22 @@ func (b *netboxBackend) renewToken(ctx context.Context, req *logical.Request, da
 		Expires: expires.Format(time.RFC3339),
 	}
 
+	// See if we need to include the key
+	requiresKey, err := c.renewRequiresKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if requiresKey {
+		// Do we have the key?
+		key, ok := req.Secret.InternalData["key"]
+		if !ok {
+			return nil, errRenewKeyMissing
+		}
+
+		tokenRequest.Key = key.(string)
+	}
+
 	// Fire off request to netbox
 	resp, err := c.rawRequest(ctx, "PATCH", path, tokenRequest)
 	if err != nil {
@@ -154,9 +170,11 @@ func (b *netboxBackend) renewToken(ctx context.Context, req *logical.Request, da
 
 type netboxTokenUpdateRequest struct {
 	Expires string `json:"expires"`
+	Key     string `json:"key,omitempty"`
 }
 
 var (
-	errTokenNotFound = errors.New("token not found")
-	errRoleNotFound  = errors.New("role not found")
+	errTokenNotFound   = errors.New("token not found")
+	errRoleNotFound    = errors.New("role not found")
+	errRenewKeyMissing = errors.New("renew requires key, but none was found")
 )
