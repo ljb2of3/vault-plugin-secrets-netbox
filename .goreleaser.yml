@@ -48,6 +48,31 @@ signs:
 sboms:
   - artifacts: binary
 
+# The curated story lives in CHANGELOG.md (Keep a Changelog). These auto-notes
+# are a secondary, de-noised commit list: drop chores/docs/CI/dependabot/merge
+# churn and group the rest. feat:/fix: commits bucket cleanly; anything else
+# lands under "Other changes".
 changelog:
   use: github
   sort: asc
+  filters:
+    exclude:
+      - "^chore:"
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^build:"
+      - "^style:"
+      - "^refactor:"
+      - "^Bump "
+      - "^Merge pull request"
+      - "^Merge branch"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??:.+$'
+      order: 1
+    - title: Other changes
+      order: 999

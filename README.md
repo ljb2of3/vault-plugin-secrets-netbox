@@ -215,6 +215,9 @@ However, [Claude Code](https://claude.com/product/claude-code) was used in the f
 - To design, and occasionally implement, test cases so no edge cases were forgotten
 - Directly generated CI configurations which were reviewed by me prior to commit
 
+## Changelog
+Notable changes for each release are documented in [CHANGELOG.md](CHANGELOG.md).
+
 ## Additional Information
 For additional information, refer to the official [Vault docs](https://developer.hashicorp.com/vault/docs/plugins/register) or [NetBox docs](https://netboxlabs.com/docs/netbox/).
 
