@@ -4,11 +4,13 @@ on:
   pull_request:
   push:
     branches: [main]
-  # Nightly run so newly published vulnerability advisories surface on their
-  # own, instead of waiting for the next push to main. Offset from the hour
-  # because on-the-hour schedules queue behind GitHub's peak load.
+  # Weekly run so newly published vulnerability advisories surface on their
+  # own, instead of waiting for the next push to main. Monday morning, offset
+  # from the hour because on-the-hour schedules queue behind GitHub's peak
+  # load. Dependabot already opens dependency PRs weekly, so a faster cadence
+  # here would mostly re-report advisories that have a PR waiting.
   schedule:
-    - cron: "17 5 * * *"
+    - cron: "17 5 * * 1"
 
 # Least-privilege default; individual jobs add scopes if they need them.
 permissions:
