@@ -4,6 +4,11 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Nightly run so newly published vulnerability advisories surface on their
+  # own, instead of waiting for the next push to main. Offset from the hour
+  # because on-the-hour schedules queue behind GitHub's peak load.
+  schedule:
+    - cron: "17 5 * * *"
 
 # Least-privilege default; individual jobs add scopes if they need them.
 permissions:
