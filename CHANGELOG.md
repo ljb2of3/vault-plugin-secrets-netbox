@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-18
+
+### Security
+
+- Rebuilt against patched dependencies and Go 1.26.6. Releases through 0.6.1
+  shipped seven advisories reachable from plugin code, in
+  `google.golang.org/grpc`, `golang.org/x/text` and the standard library. The
+  fixes are compiled into the binary, so upgrading is the only way to get them.
+
+### Changed
+
+- Building from source now requires Go 1.26.6, raised from 1.26.4.
+
 ## [0.6.1] - 2026-06-30
 
 ### Fixed
@@ -107,7 +120,8 @@ First versioned, release-tooled build.
 - Initial release. Plugin scaffolding, the `config/` endpoint for the NetBox
   server URL and admin API token, and the NetBox API client.
 
-[Unreleased]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/ljb2of3/vault-plugin-secrets-netbox/compare/v0.5.0...v0.5.1
