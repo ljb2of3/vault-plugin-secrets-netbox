@@ -1,6 +1,6 @@
 module github.com/ljb2of3/vault-plugin-secrets-netbox
 
-go 1.26.4
+go 1.26.6
 
 require (
 	github.com/hashicorp/go-hclog v1.6.3
