@@ -4,6 +4,11 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Nightly run so newly published vulnerability advisories surface on their
+  # own, instead of waiting for the next push to main. Offset from the hour
+  # because on-the-hour schedules queue behind GitHub's peak load.
+  schedule:
+    - cron: "17 5 * * *"
 
 # Least-privilege default; individual jobs add scopes if they need them.
 permissions:
@@ -55,10 +60,30 @@ jobs:
     name: govulncheck
     runs-on: ubuntu-latest
     steps:
-      # govulncheck-action does its own checkout + Go setup.
-      - uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1.0.4
+      # Deliberately not golang/govulncheck-action: it sets up Go 'stable'
+      # regardless of go.mod, so it scanned a different toolchain than the one
+      # release.yml ships. Setting Go up ourselves keeps the scan honest about
+      # what we actually build.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
+      # Building govulncheck itself may want a newer toolchain than we pin, so
+      # let this step resolve one; only the scan below has to stay pinned.
+      # setup-go exports GOTOOLCHAIN=local, hence overriding it explicitly.
+      - name: install govulncheck
+        env:
+          GOTOOLCHAIN: auto
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      # GOTOOLCHAIN=local forces the analysis onto the exact toolchain from
+      # go.mod. Without it, an auto-upgrade would scan a patched stdlib and
+      # report clean while releases still build on the vulnerable one.
+      - name: scan with the pinned toolchain
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          go version
+          govulncheck ./...
 
   license:
     name: license headers
